@@ -1,0 +1,43 @@
+[package]
+name = "vera-orchestrator"
+version = "1.0.0"
+description = "Project VERA — Multi-Agent Orchestration Backend"
+authors = ["VERA Systems"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "vera_orchestrator_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0.0", features = ["tray-icon", "image-ico", "image-png"] }
+tauri-plugin-shell = "2.0.0"
+tauri-plugin-fs = "2.0.0"
+tauri-plugin-dialog = "2.0.0"
+tauri-plugin-notification = "2.0.0"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+anyhow = "1"
+thiserror = "1"
+log = "0.4"
+env_logger = "0.11"
+dirs = "5"
+regex = "1"
+notify = "8.2.0"
+dotenvy = "0.15.7"
+
+[features]
+# By default Tauri runs in production mode
+# When using `tauri dev` it is set to `custom-protocol`
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

@@ -1,0 +1,26 @@
+# Frontend
+node_modules/
+dist/
+.vite/
+
+# Rust / Tauri backend
+src-tauri/target/
+src-tauri/gen/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Env / secrets — VERA model API keys MUST NOT be committed
+.env
+.env.local
+*.key
+
+# Logs
+*.log
+npm-debug.log*

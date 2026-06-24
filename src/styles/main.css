@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* Force layout constraints on the exact orb container and canvas */
+#orb-container {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+#orb-canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Base structural viewport overrides */
+body {
+  background-color: #141414 !important;
+  overflow: hidden;
+}
+
+::selection {
+  background-color: rgba(168, 85, 247, 0.4);
+  color: #ffffff;
+}
+
+input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 30px #0a0a0a inset !important;
+  -webkit-text-fill-color: #e4e4e7 !important;
+}
+
+/* Tauri framework native drag handling flags */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Unified Webkit layout scrollbar overrides */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a855f7;
+}
+
+/* Add this to your global stylesheet */
+.mask-fade-top {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%);
+}
+
+/* Optional: Hide the ugly default scrollbar but keep functionality */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}

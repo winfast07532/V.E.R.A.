@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>V.E.R.A. CONTROL DECK</title>
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body class="w-screen h-screen bg-[#141414] text-zinc-400 font-mono select-none p-4 relative flex flex-col justify-between overflow-hidden text-[11px] antialiased">
+
+  <header class="w-full flex justify-between items-start border-b border-purple-500/10 pb-2 z-50 titlebar-drag cursor-grab active:cursor-grabbing">
+  <div class="titlebar-no-drag">
+    <h1 class="text-xl font-black tracking-[0.25em] text-zinc-200">V.E.R.A. SYSTEM CORE</h1>
+    <p class="text-[8px] tracking-[0.15em] text-purple-500/80 uppercase mt-0.5">Stateless Modular Agentic Orchestration Pipeline</p>
+  </div>
+  
+  <div class="flex items-start gap-4 titlebar-no-drag">
+    <div class="text-right">
+      <div id="hud-clock" class="text-xl font-light text-zinc-100 tracking-wider leading-none">00:00:00</div>
+      <div id="hud-date" class="text-[8px] text-zinc-500 tracking-[0.2em] mt-1 uppercase">SYNCING CLOCK</div>
+    </div>
+
+    <div class="flex border border-zinc-800 bg-zinc-900/80 rounded overflow-hidden h-7 mt-0.5">
+      <button id="btn-minimize" class="w-7 h-full text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors font-mono text-[10px]" title="Minimize Dashboard">_</button>
+      <button id="btn-maximize" class="w-7 h-full text-zinc-500 hover:text-purple-400 hover:bg-zinc-800 transition-colors font-mono text-[10px]" title="Toggle Fullscreen">⛶</button>
+      <button id="btn-close" class="w-7 h-full text-zinc-500 hover:text-red-400 hover:bg-red-950/40 transition-colors font-mono text-[10px]" title="Terminate Kernel">×</button>
+    </div>
+  </div>
+</header>
+
+  <main class="w-full h-full grid grid-cols-12 gap-4 my-3 items-stretch relative">
+    
+    <section class="col-span-3 flex flex-col justify-between border-r border-purple-500/5 pr-4 py-2">
+      <div>
+        <h2 class="text-[10px] text-zinc-500 tracking-[0.2em] uppercase font-bold mb-4">ENGINE VITALS <span class="text-purple-500/40 font-normal">NODE.METRICS</span></h2>
+        
+        <div class="mb-4">
+          <div class="flex justify-between text-[10px] mb-0.5"><span class="tracking-wide text-zinc-300">COMPUTE LOAD</span><span id="load-pct" class="text-purple-400 font-sans text-[9px]">MINIMAL</span></div>
+          <div id="load-val" class="text-xl font-bold text-zinc-200 tracking-wide">0.00%</div>
+          <div class="w-full h-6 opacity-40 bg-purple-950/20 border-b border-purple-500/10 mt-1 relative">
+            <canvas class="sparkline w-full h-full" data-color="#8b5cf6"></canvas>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <div class="flex justify-between text-[10px] mb-0.5"><span class="tracking-wide text-zinc-300">TOTAL TOKENS TRACE</span><span class="text-zinc-600 font-sans text-[9px]">cumulative</span></div>
+          <div id="tokens-val" class="text-xl font-bold text-zinc-200 tracking-wide">0</div>
+          <div class="w-full h-6 opacity-40 bg-purple-950/20 border-b border-purple-500/10 mt-1 relative">
+            <canvas class="sparkline w-full h-full" data-color="#a78bfa"></canvas>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <div class="flex justify-between text-[10px] mb-0.5"><span class="tracking-wide text-zinc-300">CONTEXT SURFACE WINDOW</span><span class="text-zinc-600 font-sans text-[9px]">Max 1.25M Limit</span></div>
+          <div id="context-val" class="text-xl font-bold text-zinc-200 tracking-wide">0%</div>
+          <div class="w-full h-6 opacity-40 bg-purple-950/20 border-b border-purple-500/10 mt-1 relative">
+            <canvas class="sparkline w-full h-full" data-color="#e879f9"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="my-2">
+        <h2 class="text-[10px] text-zinc-500 tracking-[0.2em] uppercase font-bold mb-2">RUNNER MATRIX <span class="text-purple-500/40 font-normal">DAEMON_STATUS</span></h2>
+        <ul class="space-y-2 text-zinc-300 text-[10px] leading-tight">
+          <li class="flex items-start gap-2">
+            <svg class="w-3.5 h-3.5 mt-0.5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Model Registry Sync (models.json)</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-3.5 h-3.5 mt-0.5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+            <span>Obsidian Bridge Thread Monitoring</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <svg class="w-3.5 h-3.5 mt-0.5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+            <span>Disk Watchdog Daemon State</span>
+          </li>
+        </ul>
+        <div class="text-[8px] text-zinc-600 tracking-[0.15em] uppercase mt-3">OPERATIONAL PIPELINE ENVIRONMENT</div>
+      </div>
+    </section>
+
+    <section class="col-span-6 flex flex-col justify-between items-center relative min-h-[480px]">
+      
+      <div id="orb-container" class="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+        <div class="w-[480px] h-[480px] bg-purple-700/5 rounded-full blur-[140px] absolute"></div>
+        <canvas id="orb-canvas" class="w-full h-full absolute opacity-90"></canvas>
+      </div>
+
+      <div class="w-full absolute bottom-[72px] h-20 border-t border-purple-500/10 bg-gradient-to-b from-purple-950/5 to-transparent pointer-events-none transform -skew-x-6 opacity-30 z-0"></div>
+
+      <div id="hud-chat-wrapper" 
+     class="absolute bottom-[96px] w-full px-4 z-20 pointer-events-none transition-opacity duration-700 ease-in-out opacity-100"
+     style="-webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 100%); mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 100%);">
+  
+  <div class="relative w-full max-h-[25vh] bg-zinc-950/20 backdrop-blur-sm border-x border-b border-zinc-900/40 rounded-b pointer-events-auto">
+    <div id="chat-log" class="w-full h-full max-h-[25vh] overflow-y-auto flex flex-col gap-2 p-3 scrollbar-hide">
+         </div>
+  </div>
+</div>
+
+      <div class="z-30 w-full px-2 pb-2 titlebar-no-drag mt-auto">
+        
+        <div class="flex justify-between items-center text-[9px] tracking-[0.2em] uppercase mb-1.5 px-1 text-zinc-500">
+          <div class="flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
+            <span>UPLINK STATUS: <span id="telemetry-phase" class="text-purple-400 font-bold">STANDBY</span></span>
+            <span id="orb-status-text" class="text-zinc-600 lowercase ml-1"></span>
+          </div>
+          <div class="flex gap-4 text-[8px]">
+            <span>NODE TARGET: <span id="telemetry-model" class="text-zinc-300 font-bold">—</span></span>
+            <span>ACTIVE RUNNERS: <span id="telemetry-agents" class="text-zinc-300 font-bold">0</span></span>
+            <span>LATENCY: <span id="telemetry-latency" class="text-zinc-300 font-bold">0ms</span></span>
+          </div>
+        </div>
+
+        <div class="bg-[#1a1a1a]/80 backdrop-blur-md rounded border border-purple-500/20 shadow-[0_0_30px_rgba(147,51,234,0.03)] p-1.5 transition-all duration-300 focus-within:border-purple-500/40 flex gap-2">
+          
+          <select id="hud-model-target" class="bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono text-[9px] px-1.5 h-8 rounded focus:outline-none focus:border-purple-500/40 uppercase tracking-wider">
+  
+  <optgroup label="[01] FAST BRAIN">
+      <option value="VERA-Triage">VERA-Triage (Gemini 2.5 Flash)</option>
+    </optgroup>
+
+    <optgroup label="[02] MAIN ARCH">
+      <option value="VERA-Arch-T1">VERA-Arch-T1 (Nemotron 3 Ultra 550B)</option>
+      <option value="VERA-Arch-T2">VERA-Arch-T2 (Hermes 3 Llama 405B)</option>
+      <option value="VERA-Arch-T3">VERA-Arch-T3 (Gemma 4 31B [LOCAL])</option>
+    </optgroup>
+
+    <optgroup label="[03] SPEC MATRIX — CODE">
+      <option value="VERA-Code-T1">VERA-Code-T1 (Qwen3-Coder)</option>
+      <option value="VERA-Code-T2">VERA-Code-T2 (Qwen3-Next-80B)</option>
+      <option value="VERA-Code-T3">VERA-Code-T3 (North-Mini-Code)</option>
+      <option value="VERA-Code-Local">VERA-Code-Local (Qwen3-30B [LOCAL])</option>
+    </optgroup>
+
+    <optgroup label="[03] SPEC MATRIX — VISION">
+      <option value="VERA-Visn-T1">VERA-Visn-T1 (Gemini 2.5 Flash)</option>
+      <option value="VERA-Visn-T2">VERA-Visn-T2 (Nemotron 3 Super 120B)</option>
+      <option value="VERA-Visn-Local">VERA-Visn-Local (Gemma 4 31B [LOCAL])</option>
+    </optgroup>
+
+    <optgroup label="[03] SPEC MATRIX — MATH">
+      <option value="VERA-Math-T1">VERA-Math-T1 (Intentionally Blank)</option>
+      <option value="VERA-Math-T2">VERA-Math-T2 (GPT-OSS-120B)</option>
+      <option value="VERA-Math-Local">VERA-Math-Local (DeepSeek R1 8B [LOCAL])</option>
+    </optgroup>
+
+    <optgroup label="[03] SPEC MATRIX — WRITING">
+      <option value="VERA-Writ-T1">VERA-Writ-T1 (Llama 3.3 70B)</option>
+      <option value="VERA-Writ-T2">VERA-Writ-T2 (Gemma 4 26B)</option>
+      <option value="VERA-Writ-Local">VERA-Writ-Local (Gemma 3 Latest [LOCAL])</option>
+    </optgroup>
+
+    <optgroup label="[04] PIPELINE & DAEMON">
+      <option value="VERA-Daemon-Memory">VERA-Daemon-Memory (Flash-Lite)</option>
+      <option value="VERA-Daemon-Muscle">VERA-Daemon-Muscle (Kimi K2.6)</option>
+    </optgroup>
+
+  <optgroup label="[05] // LOCAL BEDROCK (OLLAMA)">
+    <option value="VERA-Bedrock-Arch">Gemma 4 31B [ARCH/VISN]</option>
+    <option value="VERA-Bedrock-Code">Qwen 3 30B [CODE WORKSPACE]</option>
+    <option value="VERA-Bedrock-Writ">Gemma 3 Lat [FLUENT ENGINE]</option>
+    <option value="VERA-Bedrock-Core">DeepSeek R1 [REASONING CORE]</option>
+  </optgroup>
+
+</select>
+
+          <form id="command-form" class="flex items-center gap-2 flex-1">
+            
+            <label class="group relative flex items-center justify-center w-8 h-8 rounded border border-zinc-800 bg-zinc-900/60 hover:bg-purple-950/40 hover:border-purple-500/40 cursor-pointer transition-all duration-150" title="Inject Payload Target Data">
+              <input type="file" id="hud-file-input" class="hidden" multiple />
+              <svg class="w-4 h-4 text-zinc-500 group-hover:text-purple-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <span id="upload-badge" class="hidden absolute -top-1 -right-1 bg-purple-600 text-white text-[7px] font-bold px-1 rounded-sm scale-90">0</span>
+            </label>
+
+            <div class="relative flex-1 flex items-center">
+              <svg class="absolute left-2 w-4 h-4 text-purple-500/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              <input 
+                id="command-input" 
+                type="text" 
+                placeholder="Interrogate core models or deploy automated runners..." 
+                autocomplete="off"
+                class="w-full bg-transparent pl-8 pr-2 py-1 text-zinc-200 placeholder-zinc-600 focus:outline-none text-[11px] tracking-wide font-mono"
+              />
+            </div>
+
+            <button 
+              type="button" 
+              id="hud-ptt-btn" 
+              class="w-8 h-8 rounded border border-zinc-800 bg-zinc-900/60 hover:bg-purple-950/40 hover:border-purple-500/40 text-zinc-500 hover:text-purple-400 transition-all duration-150 flex items-center justify-center" 
+              title="Hold to Capture Voice Stream [PTT]"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+            </button>
+
+            <button 
+              type="submit" 
+              id="command-submit" 
+              class="px-3 h-8 bg-purple-950/60 hover:bg-purple-600 border border-purple-500/30 hover:border-purple-400 text-purple-400 hover:text-white transition-all duration-150 font-bold rounded text-[10px] tracking-widest uppercase flex items-center gap-1.5"
+            >
+              <span>RUN</span>
+              <svg class="w-3 h-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </button>
+
+          </form>
+        </div>
+
+        <div id="file-preview-strip" class="flex flex-wrap gap-1 mt-1.5 px-0.5"></div>
+
+      </div>
+    </section>
+
+    <section class="col-span-3 flex flex-col justify-between border-l border-purple-500/5 pl-4 py-2">
+      <div>
+        <h2 class="text-[10px] text-zinc-500 tracking-[0.2em] uppercase font-bold mb-3">
+          COMMAND DECK 
+          <span class="text-[8px] text-purple-400 font-normal tracking-wide float-right uppercase">STATISTICS</span>
+        </h2>
+        <div class="grid grid-cols-2 gap-x-2 gap-y-2 text-[10px] text-zinc-300">
+          <div id="boardroom-trigger" class="flex items-center gap-1.5 cursor-pointer hover:text-purple-400 transition-colors group">
+            <svg class="w-3 h-3 text-zinc-600 group-hover:text-purple-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg> BOARDROOM
+          </div>
+          <div class="flex items-center gap-1.5 cursor-pointer hover:text-purple-400 transition-colors group">
+            <svg class="w-3 h-3 text-zinc-600 group-hover:text-purple-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg> REGISTRY INSP
+          </div>
+          <div class="flex items-center gap-1.5 cursor-pointer hover:text-purple-400 transition-colors group">
+            <svg class="w-3 h-3 text-zinc-600 group-hover:text-purple-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg> VAULT SUMMARY
+          </div>
+          <div class="flex items-center gap-1.5 cursor-pointer hover:text-purple-400 transition-colors group">
+            <svg class="w-3 h-3 text-zinc-600 group-hover:text-purple-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg> CLEAR MEMORY
+          </div>
+        </div>
+      </div>
+
+      <div class="flex-1 my-4 flex flex-col overflow-hidden">
+        <h2 class="text-[10px] text-zinc-500 tracking-[0.2em] uppercase font-bold mb-2.5">PIPELINE ARCHITECTURE <span class="text-purple-500/40 font-normal">/ TIERS</span></h2>
+        <div class="space-y-3 overflow-y-auto pr-1 flex-1 text-[10px] leading-snug">
+          <div>
+            <div class="flex items-center gap-2"><span class="text-purple-400 font-bold">TIER 1</span><span class="text-[7.5px] bg-purple-950 text-purple-400 px-1 font-sans rounded-sm font-bold scale-90">PRIMARY</span></div>
+            <p class="text-zinc-300 mt-0.5">High-performance specialists (Qwen3-Coder / Nemotron 550B).</p>
+          </div>
+          <div>
+            <span class="text-purple-400 font-bold">TIER 2</span>
+            <p class="text-zinc-300 mt-0.5">Cloud High-Reasoning Fallback routes to exhaust quota bounds.</p>
+          </div>
+          <div>
+            <span class="text-purple-400 font-bold">TIER 3</span>
+            <p class="text-zinc-300 mt-0.5">Local Anchor (Ollama / Local Bedrock Server) for 100% processing uptime.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-purple-950/10 border border-purple-500/10 p-2 text-[9.5px] leading-tight text-zinc-400 rounded-sm">
+        <span class="text-purple-400 font-bold block mb-0.5 uppercase tracking-wider">DEVELOPMENT STATUS FOCUS</span>
+        VERA Core Operational Pipeline. DEVELOPMENT.md serves as the absolute Source of Truth reference for project states, completely neutralizing multi-agent model hallucinations.
+      </div>
+    </section>
+  </main>
+
+  <div id="boardroom-panel" class="hidden absolute inset-0 bg-black/80 backdrop-blur-md z-40 flex flex-col p-6 items-center justify-center titlebar-no-drag">
+    <div class="w-full max-w-2xl bg-[#141414] border border-purple-500/30 p-4 rounded flex flex-col h-[400px] shadow-2xl">
+      <div class="flex justify-between items-center border-b border-zinc-800 pb-2 mb-3">
+        <span class="font-bold text-purple-400 tracking-widest">BOARDROOM DELIBERATION PIPELINE ACTIVE</span>
+        <button id="boardroom-close" class="text-zinc-500 hover:text-white font-sans text-sm font-bold focus:outline-none">×</button>
+      </div>
+      <div id="boardroom-transcript" class="flex-1 overflow-y-auto space-y-2 text-[11px] pr-1 select-text"></div>
+      <div id="boardroom-result" class="mt-2 pt-2 border-t border-zinc-900 text-zinc-300 font-bold"></div>
+    </div>
+  </div>
+
+  <div class="hidden">
+    <button id="btn-minimize"></button>
+    <button id="btn-compact"></button>
+    <button id="btn-close"></button>
+    <form id="command-form-hidden"><input id="command-input-hidden"/><button type="submit"></button></form>
+  </div>
+
+  <footer class="w-full flex justify-between items-center text-[8.5px] text-zinc-600 border-t border-purple-500/10 pt-2 z-10 uppercase tracking-wider">
+    <div class="flex gap-4">
+      <span class="text-zinc-500 font-bold select-text cursor-pointer hover:text-purple-400">[VERA_CORE_PROTOCOL]</span>
+      <span>Pipeline Status: <span class="text-purple-500/70">Stateless System Active · 22 Internal Nodes Loaded</span></span>
+    </div>
+    <div>vera operating kernel v1.0.0</div>
+  </footer>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

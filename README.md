@@ -294,5 +294,3 @@ In rough dependency order:
    deliberation logic separate from HTTP plumbing.
 6. Unify the orb's `PHASE_COLORS` with the Tailwind token source (§7) so
    there's one palette definition, not two.
-#   V . E . R . A .  
- 

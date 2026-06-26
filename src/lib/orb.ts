@@ -46,17 +46,48 @@ export class KineticOrb {
   private centerY = 0;
   private baseRadius = 0;
 
-  // Crank the particle count to 3000 to simulate the dense neural mesh
+// Crank the particle count to 3000 to simulate the dense neural mesh
   constructor(canvas: HTMLCanvasElement, particleCount = 1100) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("VERA Orb: Canvas 2D context unavailable");
     this.ctx = ctx;
 
+    // Create an explicit instance closure pointer to maintain execution binding
+    const self = this;
+
+    // ─── VERA CORE SYSTEM EVENT LISTENER ────────────────────────────────────
+    window.addEventListener("vera-orb-phase-shift", (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const targetPhase = customEvent.detail;
+      
+      // Verify the incoming phase string matches your internal OrbPhase system type
+      if (["standby", "listening", "thinking", "boardroom", "executing", "error"].includes(targetPhase)) {
+        
+        // Ensure the instance method executes with absolute execution context
+        if (typeof (self as any).updatePhase === "function") {
+          (self as any).updatePhase(targetPhase as OrbPhase);
+        } else if (typeof (self as any).phase !== "undefined") {
+          // Fallback if phase is handled as a direct property assignment in your code
+          (self as any).phase = targetPhase as OrbPhase;
+        }
+        
+        // Elevate the kinetic velocity mechanics based on real-time execution states
+        if (targetPhase === "thinking") {
+          self.energy = 1.8;
+        } else if (targetPhase === "listening") {
+          self.energy = 0.9;
+        } else if (targetPhase === "standby") {
+          self.energy = 0.3;
+        }
+      }
+    });
+    // ────────────────────────────────────────────────────────────────────────
+
     this.resize();
     this.initParticles(particleCount);
 
-    window.addEventListener("resize", () => this.resize());
+    window.addEventListener("resize", () => self.resize());
   }
 
   // ── Public API ────────────────────────────────────────────────────────────

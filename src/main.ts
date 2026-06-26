@@ -16,6 +16,9 @@ let historyIndex = -1;             // Tracks where you are when tapping up/down
 let temporaryInputCache = "";      // Stores what you typed before hitting Arrow Up
 let speechEngine: any = null;
 let isRecordingVoice = false;
+let isVoiceCallMode = false;
+let isMuted = false;
+let voiceController: AbortController | null = null;
 
 const LOCAL_TTS_URL = "http://localhost:8880/v1/audio/speech";
 const KOKORO_VOICE_ID = "af_bella"; // Crisp, natural, human sci-fi profile
@@ -48,40 +51,60 @@ async function startTelemetryLoop() {
       const elLatency = document.getElementById("telemetry-latency");
       const elVault = document.getElementById("telemetry-vault");
       const chatWrapper = document.getElementById("hud-chat-wrapper");
+      const transcriptPanel = document.getElementById("boardroom-panel");
+
+      // 1. HARD VISIBILITY LOCK OVERRIDE 
+      if (isVoiceCallMode) {
+        // Slam the panel shut every single tick regardless of what other stream functions want
+        if (transcriptPanel) {
+          transcriptPanel.style.display = "none"; 
+          transcriptPanel.classList.add("hidden");
+        }
+        currentOrbColor = 'rgba(255, 255, 255,'; // White Starfield for Call Mode
+      } else {
+        if (transcriptPanel) {
+          // Restore standard styles only when call mode disengages
+          transcriptPanel.style.display = ""; 
+        }
+      }
 
       if (telemetry && telemetry.data) {
-        // 1. Instantly flush text updates to the metrics panels
+        // 2. Instantly flush text metrics to DOM panels (keeps tracking active)
         if (elAgents) elAgents.innerText = telemetry.data.active_agents.toString();
         if (elTokens) elTokens.innerText = telemetry.data.tokens_processed.toString();
         if (elLatency) elLatency.innerText = telemetry.data.latency_ms + "ms";
 
-        // Dynamically skew kinetic wave generation profiles based on pipeline latency
+        // Skew kinetic velocity mechanics dynamically based on system latency
         currentDeliberationSpeed = telemetry.data.latency_ms < 500 ? 0.1 : 0.02;
 
         const currentTier = telemetry.data.active_tier;
 
-        // 2. Only compute layout styles if the execution tier or state actually changed
-        if (currentTier !== lastRenderedTier) {
-          lastRenderedTier = currentTier;
+        // 3. Batch styling routines strictly on system state transformations
+        if (currentTier !== lastRenderedTier || isVoiceCallMode) {
+          lastRenderedTier = isVoiceCallMode ? -2 : currentTier; // Shift check flag if mode overrides it
           
           let glowShadow = '';
           
-          // VERA HUD CORE PIXEL MATRIX TIER MONITOR INTEGRATION
-          if (currentTier === 1) {
-              currentOrbColor = 'rgba(0, 255, 0,';   // Tier 1 Active -> Primary Core Green
-              glowShadow = 'rgba(0, 255, 0, 0.03)';
-          } else if (currentTier === 2) {
-              currentOrbColor = 'rgba(255, 255, 0,'; // Tier 2 Active -> Quota Fallback Yellow
-              glowShadow = 'rgba(255, 255, 0, 0.03)';
-          } else if (currentTier === 3) {
-              currentOrbColor = 'rgba(255, 69, 0,';  // Tier 3 Active -> Local Anchor Orange/Red
-              glowShadow = 'rgba(255, 69, 0, 0.03)';
+          if (!isVoiceCallMode) {
+            // VERA HUD CORE PIXEL MATRIX TIER MONITOR INTEGRATION
+            if (currentTier === 1) {
+                currentOrbColor = 'rgba(0, 255, 0,';   // Tier 1 Active -> Primary Core Green
+                glowShadow = 'rgba(0, 255, 0, 0.03)';
+            } else if (currentTier === 2) {
+                currentOrbColor = 'rgba(255, 255, 0,'; // Tier 2 Active -> Quota Fallback Yellow
+                glowShadow = 'rgba(255, 255, 0, 0.03)';
+            } else if (currentTier === 3) {
+                currentOrbColor = 'rgba(255, 69, 0,';  // Tier 3 Active -> Local Anchor Orange/Red
+                glowShadow = 'rgba(255, 69, 0, 0.03)';
+            } else {
+                currentOrbColor = 'rgba(138, 43, 226,'; // Neutral Idle -> Deep VERA Purple
+                glowShadow = 'rgba(138, 43, 226, 0.03)';
+            }
           } else {
-              currentOrbColor = 'rgba(138, 43, 226,'; // Neutral Idle -> Deep VERA Purple
-              glowShadow = 'rgba(138, 43, 226, 0.03)';
+            glowShadow = 'rgba(255, 255, 255, 0.03)';
           }
 
-          // 3. Batch visual glassmorphic layout updates inside the hardware animation frame
+          // Render viewport geometry inside hardware layout request frames
           if (chatWrapper) {
             requestAnimationFrame(() => {
               chatWrapper.style.boxShadow = `0 20px 50px ${glowShadow}`;
@@ -218,6 +241,77 @@ window.addEventListener("mousemove", wakeUpHUD);
 window.addEventListener("keydown", wakeUpHUD);
 window.addEventListener("click", wakeUpHUD);
 
+// ─── Audio Helper Functions ──────────────────────────────────────────────────
+function safelyKillAudioEngine() {
+  if (currentAudioPlayback) {
+    currentAudioPlayback.pause();
+    currentAudioPlayback.src = "";
+    currentAudioPlayback.load();
+    currentAudioPlayback = null;
+    console.log("[VERA] Playback loop terminated via user interruption.");
+  }
+  if (voiceController) {
+    voiceController.abort();
+    voiceController = null;
+  }
+}
+
+async function streamVeraVoiceOutput(text: string) {
+  safelyKillAudioEngine();
+  window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "executing" }));
+  
+  // HARD SHIELD: Lock speech recognition out while audio plays to block self-hearing echo loops
+  if (speechEngine) { try { speechEngine.stop(); } catch(e) {} }
+
+  voiceController = new AbortController();
+
+  try {
+    // Strip code blocks and raw markdown syntax to maintain clean human dialogue patterns
+    const cleanTextForSpeech = text
+      .replace(/```[\s\S]*?```/g, "[Code configuration generated.]")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/[*_#\-]/g, "");
+
+    const response = await fetch(LOCAL_TTS_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "kokoro",
+        input: cleanTextForSpeech,
+        voice: KOKORO_VOICE_ID,
+        response_format: "mp3",
+        speed: 1.05 // Sleek, slightly accelerated technical pacing
+      }),
+      signal: voiceController.signal
+    });
+
+    if (!response.ok) throw new Error(`TTS server rejected stream: ${response.status}`);
+
+    const blob = await response.blob();
+    const audioUrl = URL.createObjectURL(blob);
+    
+    currentAudioPlayback = new Audio(audioUrl);
+    
+    currentAudioPlayback.onended = () => {
+      if (isVoiceCallMode) {
+        window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "listening" }));
+        // RE-OPEN THE MICROPHONE CHANNEL: Ready for your next spoken command sentence
+        if (speechEngine) { try { speechEngine.start(); } catch(e) {} }
+      } else {
+        window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "standby" }));
+      }
+    };
+
+    await currentAudioPlayback.play();
+  } catch (err: any) {
+    if (err.name !== 'AbortError') {
+      console.error("[ERR] Audio playback channel broken:", err);
+    }
+  }
+}
+
 // ─── Boot Sequence ───────────────────────────────────────────────────────────
 async function boot() {
   startHudClock();
@@ -247,88 +341,112 @@ async function boot() {
 
   if (commandForm && commandInput) {
 
-  // ─── Push-to-Talk Voice Module ──────────────────────────────────────────────
-  const pttBtn = document.getElementById("hud-ptt-btn");
-  
-  // Check browser/webkit context availability
-  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    // ─── Absolute Voice Call Engine (ChatGPT/Gemini Architecture) ─────────────────
+    const pttBtn = document.getElementById("hud-ptt-btn");
 
-  if (pttBtn && commandInput && commandForm) {
-    if (!SpeechRecognition) {
-      console.warn("Speech recognition engine not supported natively on this host subsystem platform.");
-      pttBtn.classList.add("opacity-20", "cursor-not-allowed");
-    } else {
-      // Initialize configuration parameters
-      speechEngine = new SpeechRecognition();
-      speechEngine.continuous = true;
-      speechEngine.interimResults = true;
-      speechEngine.lang = "en-US";
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-      // Stream incoming audio chunks straight into the command line
-      speechEngine.onresult = (event: any) => {
-        let liveTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            liveTranscript += event.results[i][0].transcript;
+    if (pttBtn && commandInput && commandForm) {
+      if (!SpeechRecognition) {
+        console.warn("Speech recognition engine not supported natively on this platform.");
+        pttBtn.classList.add("opacity-20", "cursor-not-allowed");
+      } else {
+        speechEngine = new SpeechRecognition();
+        speechEngine.continuous = true;
+        speechEngine.interimResults = false; 
+        speechEngine.lang = "en-US";
+
+        // Handle incoming transcribed voice chunks
+        speechEngine.onresult = (event: any) => {
+          // ANTI-ECHO PROTECTION GUARD: If VERA is currently talking, completely drop the payload
+          if (currentAudioPlayback && !currentAudioPlayback.paused) {
+            return;
           }
-        }
-        if (liveTranscript) {
-          commandInput.value = liveTranscript;
-        }
-      };
 
-      speechEngine.onerror = (err: any) => {
-        console.error("Voice capture failure segment:", err.error);
-        if (isRecordingVoice) {
-          speechEngine.stop();
-          isRecordingVoice = false;
-          pttBtn.classList.remove("text-emerald-400", "border-emerald-500/40", "bg-emerald-950/20");
-        }
-      };
-
-      // MOUSE/TOUCH HOLD DOWN: Start Recording
-      const startVoiceCapture = (e: Event) => {
-        e.preventDefault();
-        if (isRecordingVoice) return;
-        
-        isRecordingVoice = true;
-        commandInput.value = "";
-        commandInput.placeholder = "[ VERA IS LISTENING... HOLD TO TALK ]";
-        
-        // Dynamic UI feedback styling
-        pttBtn.classList.add("text-emerald-400", "border-emerald-500/40", "bg-emerald-950/20");
-        
-        speechEngine.start();
-      };
-
-      // MOUSE UP / LEAVE: Stop Recording & Auto-Submit
-      const stopVoiceCapture = (e: Event) => {
-        e.preventDefault();
-        if (!isRecordingVoice) return;
-
-        isRecordingVoice = false;
-        commandInput.placeholder = "Interrogate core models or deploy automated runners...";
-        pttBtn.classList.remove("text-emerald-400", "border-emerald-500/40", "bg-emerald-950/20");
-        
-        speechEngine.stop();
-
-        // Deliberate slight pause to let final processing string commit before submit dispatch
-        setTimeout(() => {
-          if (commandInput.value.trim()) {
+          let liveTranscript = "";
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              liveTranscript += event.results[i][0].transcript;
+            }
+          }
+          
+          if (liveTranscript.trim()) {
+            console.log("[VERA Voice Capture]:", liveTranscript);
+            commandInput.value = liveTranscript;
+            
+            // Temporarily pause speech engine during submission to prevent dual execution locks
+            try { speechEngine.stop(); } catch(e) {}
+            
+            window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "thinking" }));
             commandForm.dispatchEvent(new Event("submit"));
           }
-        }, 400);
-      };
+        };
 
-      // Bind interactions for both mouse and trackpad/touch handlers
-      pttBtn.addEventListener("mousedown", startVoiceCapture);
-      pttBtn.addEventListener("mouseup", stopVoiceCapture);
-      pttBtn.addEventListener("mouseleave", stopVoiceCapture);
-      
-      pttBtn.addEventListener("touchstart", startVoiceCapture);
-      pttBtn.addEventListener("touchend", stopVoiceCapture);
+        speechEngine.onend = () => {
+          // Loop the microphone listening channel if call session stays active
+          if (isVoiceCallMode) {
+            try { speechEngine.start(); } catch(e) {}
+          }
+        };
+
+        speechEngine.onerror = (err: any) => {
+          if (err.error !== 'not-allowed') {
+            console.error("Voice Engine Subsystem Error:", err.error);
+          }
+        };
+
+        // SINGLE TAP CONTROLLER: Dedicated session initialization
+        pttBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          
+          // 1. INTERRUPT TRIGGER: If she is speaking, a click cuts her audio instantly
+          if (currentAudioPlayback && !currentAudioPlayback.paused) {
+            safelyKillAudioEngine();
+            window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "listening" }));
+            try { speechEngine.start(); } catch(e) {}
+            return;
+          }
+
+          isVoiceCallMode = !isVoiceCallMode;
+
+          if (isVoiceCallMode) {
+            console.log("[VERA] Continuous Voice Call Activated, Sir.");
+            
+            // Establish crisp visual presentation mask properties
+            pttBtn.style.background = "rgba(138, 43, 226, 0.4)";
+            pttBtn.style.borderColor = "#8a2be2";
+            pttBtn.style.color = "#ffffff";
+            
+            const transcriptPanel = document.getElementById("boardroom-panel");
+            if (transcriptPanel) {
+              transcriptPanel.style.display = "none";
+              transcriptPanel.classList.add("hidden");
+            }
+
+            window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "listening" }));
+            try { speechEngine.start(); } catch(e) {}
+          } else {
+            console.log("[VERA] Voice Call Deactivated, Sir.");
+            
+            // Reset element style parameters cleanly
+            pttBtn.style.background = "";
+            pttBtn.style.borderColor = "";
+            pttBtn.style.color = "";
+            
+            const transcriptPanel = document.getElementById("boardroom-panel");
+            if (transcriptPanel) {
+              transcriptPanel.style.display = "";
+              transcriptPanel.classList.remove("hidden");
+            }
+
+            window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "standby" }));
+            try { speechEngine.stop(); } catch(e) {}
+            safelyKillAudioEngine();
+          }
+        });
+      }
     }
-  }
+
     // ─── Command History Keyboard Listener ───────────────────────────────────
     commandInput.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "ArrowUp") {
@@ -409,51 +527,52 @@ async function boot() {
           // src/main.ts -> Inside commandForm submit listener
           const response: any = await invoke("send_fast_message", { 
             message: value, 
-            targetModel: chosenModel // Reverted to targetModel because your Rust backend strictly requires this exact key!
+            targetModel: chosenModel 
           });
           
           const outputText = response.data || response;
           
-          // NEW: Local Zero-Cost Human Voice Engine Pipeline
-          try {
-            // 1. Immediately cut off overlapping voice threads if a new prompt fires mid-speech
-            if (currentAudioPlayback) {
-              currentAudioPlayback.pause();
-              currentAudioPlayback.src = "";
+          if (isVoiceCallMode) {
+            // NEW: Divert text straight down to zero-latency immersive audio stream pipeline
+            await streamVeraVoiceOutput(outputText);
+          } else {
+            // Standard Text Output Vocalization Fallback Layer
+            try {
+              if (currentAudioPlayback) {
+                currentAudioPlayback.pause();
+                currentAudioPlayback.src = "";
+              }
+
+              const cleanTextForSpeech = outputText
+                .replace(/```[\s\S]*?```/g, "[Code configuration generated.]")
+                .replace(/`([^`]+)`/g, "$1")
+                .replace(/[*_#\-]/g, "");
+
+              const localTtsResponse = await fetch(LOCAL_TTS_URL, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  model: "kokoro",
+                  input: cleanTextForSpeech,
+                  voice: KOKORO_VOICE_ID,
+                  response_format: "mp3",
+                  speed: 1.05 
+                })
+              });
+
+              if (!localTtsResponse.ok) throw new Error(`Local TTS Node Fault: ${localTtsResponse.status}`);
+
+              const audioBlob = await localTtsResponse.blob();
+              const audioUrl = URL.createObjectURL(audioBlob);
+              
+              currentAudioPlayback = new Audio(audioUrl);
+              currentAudioPlayback.play().catch(e => console.error("Local audio stream playback initialization blocked:", e));
+
+            } catch (speechErr) {
+              console.error("Local Kokoro pipeline failed to vocalize output sequence:", speechErr);
             }
-
-            // 2. Strip code blocks and raw markdown syntax to maintain clean human dialogue patterns
-            const cleanTextForSpeech = outputText
-              .replace(/```[\s\S]*?```/g, "[Code configuration generated.]")
-              .replace(/`([^`]+)`/g, "$1")
-              .replace(/[*_#\-]/g, "");
-
-            // 3. Dispatch payload straight down your offline network socket
-            const localTtsResponse = await fetch(LOCAL_TTS_URL, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                model: "kokoro",
-                input: cleanTextForSpeech,
-                voice: KOKORO_VOICE_ID,
-                response_format: "mp3",
-                speed: 1.05 // Sleek, slightly accelerated technical pacing
-              })
-            });
-
-            if (!localTtsResponse.ok) throw new Error(`Local TTS Node Fault: ${localTtsResponse.status}`);
-
-            // 4. Extract audio binary payload blob and commit to instant frontend playback
-            const audioBlob = await localTtsResponse.blob();
-            const audioUrl = URL.createObjectURL(audioBlob);
-            
-            currentAudioPlayback = new Audio(audioUrl);
-            currentAudioPlayback.play().catch(e => console.error("Local audio stream playback initialization blocked:", e));
-
-          } catch (speechErr) {
-            console.error("Local Kokoro pipeline failed to vocalize output sequence:", speechErr);
           }
           
           // 3. Append VERA Response Frame straight into the current active turnWrapper

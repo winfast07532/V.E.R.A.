@@ -6,10 +6,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import { KineticOrb } from "./lib/orb"; // Match your actual folder path to orb.ts
+import { parseVeraMarkdown } from "./lib/formatter";
 
 // ─── Global State ─────────────────────────────────────────────────────────────
 let currentDeliberationSpeed = 0.05;
 let currentOrbColor = 'rgba(138, 43, 226,'; 
+let commandHistory: string[] = []; // Tracks your past submitted prompts
+let historyIndex = -1;             // Tracks where you are when tapping up/down
+let temporaryInputCache = "";      // Stores what you typed before hitting Arrow Up
 
 // ─── UI Utilities ─────────────────────────────────────────────────────────────
 function startHudClock() {
@@ -39,16 +43,31 @@ async function startTelemetryLoop() {
         if (elTokens) elTokens.innerText = telemetry.data.tokens_processed.toString();
         if (elLatency) elLatency.innerText = telemetry.data.latency_ms + "ms";
 
+        // Dynamically skew kinetic wave generation profiles based on pipeline latency
         currentDeliberationSpeed = telemetry.data.latency_ms < 500 ? 0.1 : 0.02;
 
+        let glowShadow = '';
+        
+        // VERA HUD CORE PIXEL MATRIX TIER MONITOR INTEGRATION
         if (telemetry.data.active_tier === 1) {
-            currentOrbColor = 'rgba(0, 255, 0,'; 
+            currentOrbColor = 'rgba(0, 255, 0,';   // Tier 1 Active -> Primary Core Green
+            glowShadow = 'rgba(0, 255, 0, 0.03)';
         } else if (telemetry.data.active_tier === 2) {
-            currentOrbColor = 'rgba(255, 255, 0,'; 
+            currentOrbColor = 'rgba(255, 255, 0,'; // Tier 2 Active -> Quota Fallback Yellow
+            glowShadow = 'rgba(255, 255, 0, 0.03)';
         } else if (telemetry.data.active_tier === 3) {
-            currentOrbColor = 'rgba(255, 69, 0,'; 
+            currentOrbColor = 'rgba(255, 69, 0,';  // Tier 3 Active -> Local Anchor Orange/Red
+            glowShadow = 'rgba(255, 69, 0, 0.03)';
         } else {
-            currentOrbColor = 'rgba(138, 43, 226,'; 
+            currentOrbColor = 'rgba(138, 43, 226,'; // Neutral Idle -> Deep VERA Purple
+            glowShadow = 'rgba(138, 43, 226, 0.03)';
+        }
+
+        // UPDATE UI: Dynamically shift the glassmorphic ambient drop shadows and glass borders
+        const chatWrapper = document.getElementById("hud-chat-wrapper");
+        if (chatWrapper) {
+          chatWrapper.style.boxShadow = `0 20px 50px ${glowShadow}`;
+          chatWrapper.style.borderColor = `${currentOrbColor} 0.08)`;
         }
       }
       
@@ -58,7 +77,13 @@ async function startTelemetryLoop() {
       
     } catch (err) {
       console.error("Telemetry sync failed:", err);
-      currentOrbColor = 'rgba(255, 0, 0,'; 
+      currentOrbColor = 'rgba(255, 0, 0,'; // Critical Network/API Failure -> Blood Red
+      
+      const chatWrapper = document.getElementById("hud-chat-wrapper");
+      if (chatWrapper) {
+        chatWrapper.style.boxShadow = '0 20px 50px rgba(255, 0, 0, 0.05)';
+        chatWrapper.style.borderColor = 'rgba(255, 0, 0, 0.15)';
+      }
     }
   }, 1000);
 }
@@ -105,32 +130,37 @@ async function wireBoardroomListeners() {
     closeBtn.addEventListener("click", () => panel.classList.add("hidden"));
   }
 
-  await listen('boardroom:start', (event: any) => {
+  // Hook into native backend boardroom events
+  await listen("boardroom:start", (event: any) => {
     if (panel && transcript && resultBox) {
       panel.classList.remove("hidden");
-      transcript.innerHTML = `<div><span class="text-purple-400">[SYSTEM]</span> Commencing triage for: ${event.payload}</div>`;
+      // Formats the initial prompt string if it has code tokens or backticks
+      transcript.innerHTML = `<div><span class="text-purple-400">[SYSTEM]</span> Commencing triage for: ${parseVeraMarkdown(event.payload)}</div>`;
       resultBox.innerText = "Awaiting consensus...";
     }
   });
 
-  await listen('boardroom:message', (event: any) => {
+  await listen("boardroom:message", (event: any) => {
     if (transcript) {
       const msg = event.payload;
       const div = document.createElement("div");
-      div.innerHTML = `<span class="text-blue-400">[${msg.agent_name} - ${msg.role}]</span> ${msg.content}`;
+      div.className = "my-1";
+      // Formats the live text streams emitted by active agents on the fly
+      div.innerHTML = `<span class="text-blue-400">[${msg.agent_name} - ${msg.role}]</span> <div class="mt-0.5">${parseVeraMarkdown(msg.content)}</div>`;
       transcript.appendChild(div);
       transcript.scrollTop = transcript.scrollHeight;
     }
   });
 
-  await listen('boardroom:complete', (event: any) => {
+  await listen("boardroom:complete", (event: any) => {
     if (resultBox && transcript) {
       const pkg = event.payload;
       resultBox.innerText = `[CONSENSUS REACHED] Executor: ${pkg.selected_executor}`;
       
       const div = document.createElement("div");
       div.className = "text-emerald-400 mt-2 border-t border-zinc-800 pt-2";
-      div.innerHTML = `<strong>Summary:</strong> ${pkg.consensus_summary}`;
+      // Formats final multi-line summary metrics or code blocks safely
+      div.innerHTML = `<strong>Summary:</strong> <div>${parseVeraMarkdown(pkg.consensus_summary)}</div>`;
       transcript.appendChild(div);
       transcript.scrollTop = transcript.scrollHeight;
     }
@@ -142,7 +172,6 @@ let idleTimeout: number;
 const IDLE_TIME_MS = 6000; // Fades out after 6 seconds
 
 export function wakeUpHUD() {
-  // Grab it dynamically inside the function so it never returns null
   const chatWrapper = document.getElementById("hud-chat-wrapper");
   
   if (chatWrapper) {
@@ -163,7 +192,6 @@ export function wakeUpHUD() {
 window.addEventListener("mousemove", wakeUpHUD);
 window.addEventListener("keydown", wakeUpHUD);
 window.addEventListener("click", wakeUpHUD);
-// ────────────────────────────────────────────────────────────────────────────
 
 // ─── Boot Sequence ───────────────────────────────────────────────────────────
 async function boot() {
@@ -193,10 +221,43 @@ async function boot() {
   const modelTargetSelector = document.getElementById("hud-model-target") as HTMLSelectElement | null;
 
   if (commandForm && commandInput) {
+    // ─── Command History Keyboard Listener ───────────────────────────────────
+    commandInput.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "ArrowUp") {
+        e.preventDefault(); // Prevent cursor jumping to the front of the text line
+        if (commandHistory.length === 0) return;
+
+        if (historyIndex === -1) {
+          temporaryInputCache = commandInput.value;
+        }
+
+        if (historyIndex < commandHistory.length - 1) {
+          historyIndex++;
+          commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
+        }
+      } 
+      else if (e.key === "ArrowDown") {
+        e.preventDefault();
+
+        if (historyIndex > 0) {
+          historyIndex--;
+          commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
+        } else if (historyIndex === 0) {
+          historyIndex = -1;
+          commandInput.value = temporaryInputCache;
+        }
+      }
+    });
+
     commandForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const value = commandInput.value.trim();
       if (!value) return;
+
+      // Track prompt state variables in history cache layers on commit
+      commandHistory.push(value);
+      historyIndex = -1;
+      temporaryInputCache = "";
 
       commandInput.value = "";
       
@@ -204,50 +265,106 @@ async function boot() {
       const chosenModel = modelTargetSelector ? modelTargetSelector.value : "VERA-Triage";
       const chatLog = document.getElementById("chat-log");
 
-      // 1. Render User Input
+      // 1. Create a persistent wrapper frame for this interactive turn
+      const turnWrapper = document.createElement("div");
+      turnWrapper.className = "flex flex-col my-3";
+      
+      // Append user entry segment
+      const userBox = document.createElement("div");
+      userBox.className = "group relative text-zinc-400 font-mono my-1 pl-2 border-l border-zinc-800 flex flex-col";
+      userBox.innerHTML = `
+        <div><span class="text-zinc-600 font-bold">▲ USER [${selectedMode.toUpperCase()}]:</span> <span class="user-prompt">${value}</span></div>
+        <div class="opacity-0 group-hover:opacity-100 flex gap-3 text-[10px] mt-1 text-zinc-500 transition-opacity duration-150 titlebar-no-drag">
+          <button class="edit-trigger hover:text-purple-400 cursor-pointer">[Edit]</button>
+        </div>
+      `;
+
+      // Bind edit click inline
+      userBox.querySelector(".edit-trigger")?.addEventListener("click", () => {
+        commandInput.value = value;
+        commandInput.focus();
+        turnWrapper.remove();
+      });
+
+      turnWrapper.appendChild(userBox);
       if (chatLog) {
-        chatLog.innerHTML += `
-          <div class="text-zinc-400 font-mono my-2 pl-2 border-l border-zinc-800">
-            <span class="text-zinc-600 font-bold">▲ USER [${selectedMode.toUpperCase()}]:</span> ${value}
-          </div>
-        `;
+        chatLog.appendChild(turnWrapper);
         chatLog.scrollTop = chatLog.scrollHeight;
-        wakeUpHUD(); // Keep HUD awake while user is typing/sending
+        wakeUpHUD();
       }
 
       try {
         if (selectedMode === "agentic" || value.toLowerCase().includes("boardroom")) {
           await invoke("run_boardroom_debate", { task: value });
         } else {
-          // 2. Dispatch tactical strike
+          
+          // src/main.ts -> Inside commandForm submit listener
           const response: any = await invoke("send_fast_message", { 
             message: value, 
-            targetModel: chosenModel 
+            targetModel: chosenModel // Reverted to targetModel because your Rust backend strictly requires this exact key!
           });
           
           const outputText = response.data || response;
+          
+          // 3. Append VERA Response Frame straight into the current active turnWrapper
+          const veraBox = document.createElement("div");
+          veraBox.className = "group relative text-zinc-300 font-mono my-2 bg-zinc-950/40 p-2 rounded border border-zinc-900/50 flex flex-col";
+          veraBox.innerHTML = `
+            <div><span class="text-purple-400 font-bold">▶ VERA [${chosenModel}]:</span> <div class="mt-1">${parseVeraMarkdown(outputText)}</div></div>
+            <div class="opacity-0 group-hover:opacity-100 flex gap-3 text-[10px] mt-1.5 text-zinc-500 transition-opacity duration-150 titlebar-no-drag">
+              <button class="copy-trigger hover:text-emerald-400 cursor-pointer">[Copy]</button>
+              <button class="retry-trigger hover:text-blue-400 cursor-pointer">[Retry]</button>
+            </div>
+          `;
 
-          // 3. Render Node Response
+          // Bind Copy Utility
+          veraBox.querySelector(".copy-trigger")?.addEventListener("click", async (btnEvent) => {
+            try {
+              await navigator.clipboard.writeText(outputText);
+              (btnEvent.target as HTMLButtonElement).innerText = "[Copied!]";
+              setTimeout(() => { 
+                if (veraBox) {
+                  const btn = veraBox.querySelector(".copy-trigger") as HTMLButtonElement;
+                  if (btn) btn.innerText = "[Copy]";
+                }
+              }, 1200);
+            } catch (err) {
+              console.error("Clipboard operational write failure:", err);
+            }
+          });
+
+          // Bind Retry Utility
+          veraBox.querySelector(".retry-trigger")?.addEventListener("click", () => {
+            turnWrapper.remove();
+            commandInput.value = value;
+            commandForm.dispatchEvent(new Event("submit"));
+          });
+
+          turnWrapper.appendChild(veraBox);
           if (chatLog) {
-            chatLog.innerHTML += `
-              <div class="text-zinc-300 font-mono my-2 bg-zinc-950/40 p-2 rounded border border-zinc-900/50">
-                <span class="text-purple-400 font-bold">▶ VERA [${chosenModel}]:</span> ${outputText}
-              </div>
-            `;
             chatLog.scrollTop = chatLog.scrollHeight;
-            wakeUpHUD(); // Wake HUD back up if it faded during processing
+            wakeUpHUD();
           }
         }
       } catch (err) {
         console.error("Pipeline Execution Error:", err);
+        const errBox = document.createElement("div");
+        errBox.className = "text-red-400 font-mono my-1 text-xs pl-2 border-l border-red-900/40 flex items-center gap-2";
+        errBox.innerHTML = `
+          <span><span class="text-red-500 font-bold">❌ MATRIX CRITICAL ERR:</span> ${err}</span>
+          <button class="err-retry border border-zinc-800 px-1 rounded bg-black/20 text-[9px] hover:text-red-400 transition-colors cursor-pointer titlebar-no-drag">RETRY</button>
+        `;
+        
+        errBox.querySelector(".err-retry")?.addEventListener("click", () => {
+          turnWrapper.remove();
+          commandInput.value = value;
+          commandForm.dispatchEvent(new Event("submit"));
+        });
+
+        turnWrapper.appendChild(errBox);
         if (chatLog) {
-          chatLog.innerHTML += `
-            <div class="text-red-400 font-mono my-1 text-xs">
-              <span class="text-red-500 font-bold">❌ MATRIX CRITICAL ERR:</span> ${err}
-            </div>
-          `;
           chatLog.scrollTop = chatLog.scrollHeight;
-          wakeUpHUD(); // Wake up for errors too
+          wakeUpHUD();
         }
       }
     });

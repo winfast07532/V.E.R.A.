@@ -89,10 +89,10 @@
       <div class="w-full absolute bottom-[72px] h-20 border-t border-purple-500/10 bg-gradient-to-b from-purple-950/5 to-transparent pointer-events-none transform -skew-x-6 opacity-30 z-0"></div>
 
       <div id="hud-chat-wrapper" 
-     class="absolute bottom-[96px] w-full px-4 z-20 pointer-events-none transition-opacity duration-700 ease-in-out opacity-100"
+     class="absolute bottom-[96px] w-full px-4 z-20 pointer-events-none transition-all duration-300 ease-in-out opacity-100"
      style="-webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 100%); mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 100%);">
   
-  <div class="relative w-full max-h-[25vh] bg-zinc-950/20 backdrop-blur-sm border-x border-b border-zinc-900/40 rounded-b pointer-events-auto">
+  <div class="relative w-full max-h-[25vh] hud-glass-panel rounded pointer-events-auto">
     <div id="chat-log" class="w-full h-full max-h-[25vh] overflow-y-auto flex flex-col gap-2 p-3 scrollbar-hide">
          </div>
   </div>
@@ -113,7 +113,7 @@
           </div>
         </div>
 
-        <div class="bg-[#1a1a1a]/80 backdrop-blur-md rounded border border-purple-500/20 shadow-[0_0_30px_rgba(147,51,234,0.03)] p-1.5 transition-all duration-300 focus-within:border-purple-500/40 flex gap-2">
+        <div class="hud-glass-input rounded p-1.5 transition-all duration-300 flex gap-2">
           
           <select id="hud-model-target" class="bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono text-[9px] px-1.5 h-8 rounded focus:outline-none focus:border-purple-500/40 uppercase tracking-wider">
   
@@ -259,7 +259,7 @@
   </main>
 
   <div id="boardroom-panel" class="hidden absolute inset-0 bg-black/80 backdrop-blur-md z-40 flex flex-col p-6 items-center justify-center titlebar-no-drag">
-    <div class="w-full max-w-2xl bg-[#141414] border border-purple-500/30 p-4 rounded flex flex-col h-[400px] shadow-2xl">
+    <div class="w-full max-w-2xl hud-glass-panel p-4 rounded flex flex-col h-[400px] shadow-2xl">
       <div class="flex justify-between items-center border-b border-zinc-800 pb-2 mb-3">
         <span class="font-bold text-purple-400 tracking-widest">BOARDROOM DELIBERATION PIPELINE ACTIVE</span>
         <button id="boardroom-close" class="text-zinc-500 hover:text-white font-sans text-sm font-bold focus:outline-none">×</button>

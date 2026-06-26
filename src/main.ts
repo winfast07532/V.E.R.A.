@@ -14,6 +14,8 @@ let currentOrbColor = 'rgba(138, 43, 226,';
 let commandHistory: string[] = []; // Tracks your past submitted prompts
 let historyIndex = -1;             // Tracks where you are when tapping up/down
 let temporaryInputCache = "";      // Stores what you typed before hitting Arrow Up
+let speechEngine: any = null;
+let isRecordingVoice = false;
 
 // ─── UI Utilities ─────────────────────────────────────────────────────────────
 function startHudClock() {
@@ -221,6 +223,89 @@ async function boot() {
   const modelTargetSelector = document.getElementById("hud-model-target") as HTMLSelectElement | null;
 
   if (commandForm && commandInput) {
+
+  // ─── Push-to-Talk Voice Module ──────────────────────────────────────────────
+  const pttBtn = document.getElementById("hud-ptt-btn");
+  
+  // Check browser/webkit context availability
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+  if (pttBtn && commandInput && commandForm) {
+    if (!SpeechRecognition) {
+      console.warn("Speech recognition engine not supported natively on this host subsystem platform.");
+      pttBtn.classList.add("opacity-20", "cursor-not-allowed");
+    } else {
+      // Initialize configuration parameters
+      speechEngine = new SpeechRecognition();
+      speechEngine.continuous = true;
+      speechEngine.interimResults = true;
+      speechEngine.lang = "en-US";
+
+      // Stream incoming audio chunks straight into the command line
+      speechEngine.onresult = (event: any) => {
+        let liveTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            liveTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (liveTranscript) {
+          commandInput.value = liveTranscript;
+        }
+      };
+
+      speechEngine.onerror = (err: any) => {
+        console.error("Voice capture failure segment:", err.error);
+        if (isRecordingVoice) {
+          speechEngine.stop();
+          isRecordingVoice = false;
+          pttBtn.classList.remove("text-emerald-400", "border-emerald-500/40", "bg-emerald-950/20");
+        }
+      };
+
+      // MOUSE/TOUCH HOLD DOWN: Start Recording
+      const startVoiceCapture = (e: Event) => {
+        e.preventDefault();
+        if (isRecordingVoice) return;
+        
+        isRecordingVoice = true;
+        commandInput.value = "";
+        commandInput.placeholder = "[ VERA IS LISTENING... HOLD TO TALK ]";
+        
+        // Dynamic UI feedback styling
+        pttBtn.classList.add("text-emerald-400", "border-emerald-500/40", "bg-emerald-950/20");
+        
+        speechEngine.start();
+      };
+
+      // MOUSE UP / LEAVE: Stop Recording & Auto-Submit
+      const stopVoiceCapture = (e: Event) => {
+        e.preventDefault();
+        if (!isRecordingVoice) return;
+
+        isRecordingVoice = false;
+        commandInput.placeholder = "Interrogate core models or deploy automated runners...";
+        pttBtn.classList.remove("text-emerald-400", "border-emerald-500/40", "bg-emerald-950/20");
+        
+        speechEngine.stop();
+
+        // Deliberate slight pause to let final processing string commit before submit dispatch
+        setTimeout(() => {
+          if (commandInput.value.trim()) {
+            commandForm.dispatchEvent(new Event("submit"));
+          }
+        }, 400);
+      };
+
+      // Bind interactions for both mouse and trackpad/touch handlers
+      pttBtn.addEventListener("mousedown", startVoiceCapture);
+      pttBtn.addEventListener("mouseup", stopVoiceCapture);
+      pttBtn.addEventListener("mouseleave", stopVoiceCapture);
+      
+      pttBtn.addEventListener("touchstart", startVoiceCapture);
+      pttBtn.addEventListener("touchend", stopVoiceCapture);
+    }
+  }
     // ─── Command History Keyboard Listener ───────────────────────────────────
     commandInput.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "ArrowUp") {

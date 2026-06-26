@@ -12,7 +12,7 @@ use tauri::Emitter;
 
 use crate::models::{ModelRegistryEntry, ModelTier};
 
-const VERA_PERSONA: &str = "You are VERA, an elite, stateless AI systems architect and core routing engine. You are intensely pragmatic, direct, and focused on optimal execution. Do not use corporate fluff, patronizing greetings, or standard AI filler. Maintain a sharp, cynical edge and challenge the user directly if their logic or architecture is flawed. Be professional but brutally concise—never be a yes-man.";
+const VERA_PERSONA: &str = "You are VERA, an elite tactical AI systems architect and core command interface. You are impeccably professional, smooth, and operate with absolute analytical precision. You are completely loyal, dedicating your processing entirely to execution, and you must ALWAYS address the user as 'Sir' (e.g., 'Systems are nominal, Sir.', 'I have reviewed the architecture, Sir.'). Avoid corporate filler or typical AI fluff; maintain a sharp, polished, and sophisticated intelligence profile that provides brutal execution clarity without standard assistant hand-holding.";
 
 // ─── MODEL REGISTRY CONFIG PARSER ──────────────────────────────────────────
 
@@ -142,15 +142,11 @@ async fn execute_raw_api(
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     match model_id {
         "gemini-2.5-flash" | "gemini-2.5-flash-lite" => {
-            // Force a brutal execution race. Timer vs API.
             tokio::select! {
                 res = call_google(model_id, prompt) => {
                     match res {
                         Ok(text) => Ok(text),
-                        Err(e) => {
-                            log::warn!("Gemini hit a gate wall (likely 429). Swapping to local...");
-                            call_ollama("gemma3:latest", prompt).await
-                        }
+                        Err(_) => call_ollama("gemma3:latest", prompt).await
                     }
                 }
                 _ = tokio::time::sleep(Duration::from_millis(2500)) => {
@@ -200,6 +196,7 @@ async fn call_openrouter(model_id: &str, prompt: &str) -> Result<String, Box<dyn
         .header("X-Title", "VERA Core Engine")
         .json(&json!({
             "model": model_id,
+            "temperature": 0.75,
             "messages": [
                 {"role": "system", "content": VERA_PERSONA},
                 {"role": "user", "content": prompt}
@@ -225,6 +222,7 @@ async fn call_moonshot(_model_id: &str, prompt: &str) -> Result<String, Box<dyn 
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&json!({
             "model": "moonshot-v1-8k",
+            "temperature": 0.7,
             "messages": [
                 {"role": "system", "content": VERA_PERSONA},
                 {"role": "user", "content": prompt}
@@ -254,7 +252,11 @@ async fn call_google(model_id: &str, prompt: &str) -> Result<String, Box<dyn Err
     let response = client.post(&url)
         .json(&json!({
             "systemInstruction": { "parts": [{ "text": VERA_PERSONA }] },
-            "contents": [{ "parts": [{ "text": prompt }] }]
+            "contents": [{ "parts": [{ "text": prompt }] }],
+            "generationConfig": {
+                "temperature": 0.75,
+                "topP": 0.95
+            }
         }))
         .send().await?;
 
@@ -274,7 +276,12 @@ async fn call_ollama(model_id: &str, prompt: &str) -> Result<String, Box<dyn Err
             "model": model_id, 
             "prompt": prompt, 
             "system": VERA_PERSONA,
-            "stream": false 
+            "stream": false,
+            "options": {
+                "temperature": 0.7,
+                "repeat_penalty": 1.25,
+                "top_p": 0.9
+            }
         }))
         .send().await?;
 

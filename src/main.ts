@@ -17,6 +17,10 @@ let temporaryInputCache = "";      // Stores what you typed before hitting Arrow
 let speechEngine: any = null;
 let isRecordingVoice = false;
 
+const LOCAL_TTS_URL = "http://localhost:8880/v1/audio/speech";
+const KOKORO_VOICE_ID = "af_bella"; // Crisp, natural, human sci-fi profile
+let currentAudioPlayback: HTMLAudioElement | null = null;
+
 // ─── UI Utilities ─────────────────────────────────────────────────────────────
 function startHudClock() {
   const clockEl = document.getElementById('hud-clock');
@@ -29,6 +33,10 @@ function startHudClock() {
 }
 
 // ─── Telemetry Loop ───────────────────────────────────────────────────────────
+// Cache state locally to prevent redundant DOM style injections
+let lastRenderedTier = -1;
+let lastRenderedVault = "";
+
 async function startTelemetryLoop() {
   setInterval(async () => {
     try {
@@ -39,8 +47,10 @@ async function startTelemetryLoop() {
       const elTokens = document.getElementById("telemetry-tokens");
       const elLatency = document.getElementById("telemetry-latency");
       const elVault = document.getElementById("telemetry-vault");
+      const chatWrapper = document.getElementById("hud-chat-wrapper");
 
       if (telemetry && telemetry.data) {
+        // 1. Instantly flush text updates to the metrics panels
         if (elAgents) elAgents.innerText = telemetry.data.active_agents.toString();
         if (elTokens) elTokens.innerText = telemetry.data.tokens_processed.toString();
         if (elLatency) elLatency.innerText = telemetry.data.latency_ms + "ms";
@@ -48,43 +58,56 @@ async function startTelemetryLoop() {
         // Dynamically skew kinetic wave generation profiles based on pipeline latency
         currentDeliberationSpeed = telemetry.data.latency_ms < 500 ? 0.1 : 0.02;
 
-        let glowShadow = '';
-        
-        // VERA HUD CORE PIXEL MATRIX TIER MONITOR INTEGRATION
-        if (telemetry.data.active_tier === 1) {
-            currentOrbColor = 'rgba(0, 255, 0,';   // Tier 1 Active -> Primary Core Green
-            glowShadow = 'rgba(0, 255, 0, 0.03)';
-        } else if (telemetry.data.active_tier === 2) {
-            currentOrbColor = 'rgba(255, 255, 0,'; // Tier 2 Active -> Quota Fallback Yellow
-            glowShadow = 'rgba(255, 255, 0, 0.03)';
-        } else if (telemetry.data.active_tier === 3) {
-            currentOrbColor = 'rgba(255, 69, 0,';  // Tier 3 Active -> Local Anchor Orange/Red
-            glowShadow = 'rgba(255, 69, 0, 0.03)';
-        } else {
-            currentOrbColor = 'rgba(138, 43, 226,'; // Neutral Idle -> Deep VERA Purple
-            glowShadow = 'rgba(138, 43, 226, 0.03)';
-        }
+        const currentTier = telemetry.data.active_tier;
 
-        // UPDATE UI: Dynamically shift the glassmorphic ambient drop shadows and glass borders
-        const chatWrapper = document.getElementById("hud-chat-wrapper");
-        if (chatWrapper) {
-          chatWrapper.style.boxShadow = `0 20px 50px ${glowShadow}`;
-          chatWrapper.style.borderColor = `${currentOrbColor} 0.08)`;
+        // 2. Only compute layout styles if the execution tier or state actually changed
+        if (currentTier !== lastRenderedTier) {
+          lastRenderedTier = currentTier;
+          
+          let glowShadow = '';
+          
+          // VERA HUD CORE PIXEL MATRIX TIER MONITOR INTEGRATION
+          if (currentTier === 1) {
+              currentOrbColor = 'rgba(0, 255, 0,';   // Tier 1 Active -> Primary Core Green
+              glowShadow = 'rgba(0, 255, 0, 0.03)';
+          } else if (currentTier === 2) {
+              currentOrbColor = 'rgba(255, 255, 0,'; // Tier 2 Active -> Quota Fallback Yellow
+              glowShadow = 'rgba(255, 255, 0, 0.03)';
+          } else if (currentTier === 3) {
+              currentOrbColor = 'rgba(255, 69, 0,';  // Tier 3 Active -> Local Anchor Orange/Red
+              glowShadow = 'rgba(255, 69, 0, 0.03)';
+          } else {
+              currentOrbColor = 'rgba(138, 43, 226,'; // Neutral Idle -> Deep VERA Purple
+              glowShadow = 'rgba(138, 43, 226, 0.03)';
+          }
+
+          // 3. Batch visual glassmorphic layout updates inside the hardware animation frame
+          if (chatWrapper) {
+            requestAnimationFrame(() => {
+              chatWrapper.style.boxShadow = `0 20px 50px ${glowShadow}`;
+              chatWrapper.style.borderColor = `${currentOrbColor} 0.08)`;
+            });
+          }
         }
       }
       
-      if (vaultPath && vaultPath.data && elVault) {
+      // 4. Cache validation for the system vault path string
+      if (vaultPath && vaultPath.data && elVault && vaultPath.data !== lastRenderedVault) {
+        lastRenderedVault = vaultPath.data;
         elVault.innerText = vaultPath.data;
       }
       
     } catch (err) {
       console.error("Telemetry sync failed:", err);
       currentOrbColor = 'rgba(255, 0, 0,'; // Critical Network/API Failure -> Blood Red
+      lastRenderedTier = -1; // Force state invalidation so recovery path clears seamlessly
       
       const chatWrapper = document.getElementById("hud-chat-wrapper");
       if (chatWrapper) {
-        chatWrapper.style.boxShadow = '0 20px 50px rgba(255, 0, 0, 0.05)';
-        chatWrapper.style.borderColor = 'rgba(255, 0, 0, 0.15)';
+        requestAnimationFrame(() => {
+          chatWrapper.style.boxShadow = '0 20px 50px rgba(255, 0, 0, 0.05)';
+          chatWrapper.style.borderColor = 'rgba(255, 0, 0, 0.15)';
+        });
       }
     }
   }, 1000);
@@ -390,6 +413,48 @@ async function boot() {
           });
           
           const outputText = response.data || response;
+          
+          // NEW: Local Zero-Cost Human Voice Engine Pipeline
+          try {
+            // 1. Immediately cut off overlapping voice threads if a new prompt fires mid-speech
+            if (currentAudioPlayback) {
+              currentAudioPlayback.pause();
+              currentAudioPlayback.src = "";
+            }
+
+            // 2. Strip code blocks and raw markdown syntax to maintain clean human dialogue patterns
+            const cleanTextForSpeech = outputText
+              .replace(/```[\s\S]*?```/g, "[Code configuration generated.]")
+              .replace(/`([^`]+)`/g, "$1")
+              .replace(/[*_#\-]/g, "");
+
+            // 3. Dispatch payload straight down your offline network socket
+            const localTtsResponse = await fetch(LOCAL_TTS_URL, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                model: "kokoro",
+                input: cleanTextForSpeech,
+                voice: KOKORO_VOICE_ID,
+                response_format: "mp3",
+                speed: 1.05 // Sleek, slightly accelerated technical pacing
+              })
+            });
+
+            if (!localTtsResponse.ok) throw new Error(`Local TTS Node Fault: ${localTtsResponse.status}`);
+
+            // 4. Extract audio binary payload blob and commit to instant frontend playback
+            const audioBlob = await localTtsResponse.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            currentAudioPlayback = new Audio(audioUrl);
+            currentAudioPlayback.play().catch(e => console.error("Local audio stream playback initialization blocked:", e));
+
+          } catch (speechErr) {
+            console.error("Local Kokoro pipeline failed to vocalize output sequence:", speechErr);
+          }
           
           // 3. Append VERA Response Frame straight into the current active turnWrapper
           const veraBox = document.createElement("div");

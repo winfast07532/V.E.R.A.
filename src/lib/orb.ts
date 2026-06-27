@@ -1,16 +1,20 @@
 // src/lib/orb.ts
-// Project VERA — Kinetic Purple Orb Telemetry Engine
-// HTML5 Canvas 3D particle-mesh reactive to processing state, with
-// a Web Audio synthesized ambient tone that shifts with system load.
+// Project VERA — Stable Cinematic Accretion Singularity Engine
+// Precision Coordinate-Mapped 3D Mesh with Dampened Fluid Turbulence,
+// Relativistic Lensing, and Context-Locked Window Responsive Boundaries.
 
 export type OrbPhase = "standby" | "listening" | "thinking" | "boardroom" | "executing" | "error";
 
 interface Particle {
-  baseX: number;
-  baseY: number;
-  baseZ: number;
+  x: number;
+  y: number;
+  z: number;
   size: number;
   randomOffset: number;
+  orbitalRadius: number;
+  orbitalSpeed: number;
+  isRingParticle: boolean;
+  history: { x: number; y: number; alpha: number }[]; 
 }
 
 const PHASE_COLORS: Record<OrbPhase, { core: string; mid: string; outer: string }> = {
@@ -32,134 +36,87 @@ export class KineticOrb {
   private phase: OrbPhase = "standby";
   private energy = 0.3;          
   private targetEnergy = 0.3;
-  private pulseFrequency = 1.0;  
-
-  // Web Audio
-  private audioCtx: AudioContext | null = null;
-  private oscillator: OscillatorNode | null = null;
-  private gainNode: GainNode | null = null;
-  private filterNode: BiquadFilterNode | null = null;
-  private audioEnabled = false;
+  private pulseFrequency = 0.5;  // Cut in half to eliminate hyper-flicker
+  private voiceEnergyModifier = 0; 
 
   private dpr = Math.max(1, window.devicePixelRatio || 1);
   private centerX = 0;
   private centerY = 0;
   private baseRadius = 0;
 
-// Crank the particle count to 3000 to simulate the dense neural mesh
-  constructor(canvas: HTMLCanvasElement, particleCount = 1100) {
+  constructor(canvas: HTMLCanvasElement, totalParticles = 1400) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("VERA Orb: Canvas 2D context unavailable");
     this.ctx = ctx;
 
-    // Create an explicit instance closure pointer to maintain execution binding
     const self = this;
 
-    // ─── VERA CORE SYSTEM EVENT LISTENER ────────────────────────────────────
     window.addEventListener("vera-orb-phase-shift", (e: Event) => {
       const customEvent = e as CustomEvent<string>;
       const targetPhase = customEvent.detail;
       
-      // Verify the incoming phase string matches your internal OrbPhase system type
       if (["standby", "listening", "thinking", "boardroom", "executing", "error"].includes(targetPhase)) {
-        
-        // Ensure the instance method executes with absolute execution context
-        if (typeof (self as any).updatePhase === "function") {
-          (self as any).updatePhase(targetPhase as OrbPhase);
-        } else if (typeof (self as any).phase !== "undefined") {
-          // Fallback if phase is handled as a direct property assignment in your code
-          (self as any).phase = targetPhase as OrbPhase;
-        }
-        
-        // Elevate the kinetic velocity mechanics based on real-time execution states
-        if (targetPhase === "thinking") {
-          self.energy = 1.8;
-        } else if (targetPhase === "listening") {
-          self.energy = 0.9;
-        } else if (targetPhase === "standby") {
-          self.energy = 0.3;
-        }
+        self.setPhase(targetPhase as OrbPhase);
       }
     });
-    // ────────────────────────────────────────────────────────────────────────
 
     this.resize();
-    this.initParticles(particleCount);
+    this.initParticles(totalParticles);
 
-    window.addEventListener("resize", () => self.resize());
+    window.addEventListener("resize", () => {
+      this.resize();
+    });
   }
-
-  // ── Public API ────────────────────────────────────────────────────────────
 
   setPhase(phase: OrbPhase) {
     this.phase = phase;
+    
     const energyByPhase: Record<OrbPhase, number> = {
-      standby: 0.3,
-      listening: 0.5,
-      thinking: 0.72,
-      boardroom: 0.95,
-      executing: 0.85,
-      error: 0.6,
+      standby: 0.2,   // Dropped base idling energy
+      listening: 0.6,     
+      thinking: 1.2,  // Hard capped load velocity limits    
+      boardroom: 0.9,     
+      executing: 0.8,     
+      error: 1.5,         
     };
     this.targetEnergy = energyByPhase[phase];
 
     const freqByPhase: Record<OrbPhase, number> = {
-      standby: 0.6,
-      listening: 1.0,
-      thinking: 1.6,
-      boardroom: 2.4,
-      executing: 2.0,
-      error: 3.2,
+      standby: 0.3,
+      listening: 0.8,
+      thinking: 1.8,      
+      boardroom: 1.2,
+      executing: 1.0,
+      error: 2.2,
     };
     this.pulseFrequency = freqByPhase[phase];
-
-    if (this.audioEnabled) this.updateAudioForPhase(phase);
   }
 
   setEnergyLevel(v: number) {
     this.targetEnergy = Math.max(0, Math.min(1, v));
   }
 
-  async enableAudio() {
-    if (this.audioEnabled) return;
-    this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  setEnergyFromVoice(level: number) {
+    // Smoothly scale voice inputs down so they dont blow out the geometry limits
+    this.voiceEnergyModifier = level * 0.4;
+  }
 
-    this.oscillator = this.audioCtx.createOscillator();
-    this.gainNode = this.audioCtx.createGain();
-    this.filterNode = this.audioCtx.createBiquadFilter();
-
-    this.oscillator.type = "sine";
-    this.oscillator.frequency.value = 110; 
-    this.filterNode.type = "lowpass";
-    this.filterNode.frequency.value = 800;
-    this.filterNode.Q.value = 4;
-    this.gainNode.gain.value = 0; 
-
-    this.oscillator.connect(this.filterNode);
-    this.filterNode.connect(this.gainNode);
-    this.gainNode.connect(this.audioCtx.destination);
-
-    this.oscillator.start();
-    this.gainNode.gain.linearRampToValueAtTime(0.035, this.audioCtx.currentTime + 1.2);
-
-    this.audioEnabled = true;
+  enableAudio() {
+    return Promise.resolve(); // Kept interface signature untouched
   }
 
   disableAudio() {
-    if (!this.audioEnabled || !this.audioCtx) return;
-    this.gainNode?.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + 0.6);
-    setTimeout(() => {
-      this.oscillator?.stop();
-      this.audioCtx?.close();
-      this.audioEnabled = false;
-    }, 700);
+    // Kept interface signature untouched
   }
 
   start() {
     const loop = () => {
-      this.time += 0.016;
-      this.energy += (this.targetEnergy - this.energy) * 0.04;
+      this.time += 0.008; // Cut global elapsed clock speed in half for stable drift
+      
+      const activeTarget = this.voiceEnergyModifier > 0 ? this.voiceEnergyModifier : this.targetEnergy;
+      this.energy += (activeTarget - this.energy) * 0.05; // Smooth interpolation damping
+      
       this.render();
       this.animationFrame = requestAnimationFrame(loop);
     };
@@ -172,63 +129,67 @@ export class KineticOrb {
 
   destroy() {
     this.stop();
-    this.disableAudio();
   }
-
-  // ── Internals ──────────────────────────────────────────────────────────────
 
   private resize() {
     const rect = this.canvas.getBoundingClientRect();
     this.dpr = Math.max(1, window.devicePixelRatio || 1);
+    
     this.canvas.width = rect.width * this.dpr;
     this.canvas.height = rect.height * this.dpr;
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     this.centerX = rect.width / 2;
     this.centerY = rect.height / 2;
-    this.baseRadius = Math.min(rect.width, rect.height) * 0.45; // Expand to fill space
+    // CRITICAL STABILIZATION: Dropped scale multiplier from 0.44 to 0.32 so it NEVER clips window bounds
+    this.baseRadius = Math.min(rect.width, rect.height) * 0.32; 
   }
 
-  // Generate points evenly distributed within a 3D spherical volume
   private initParticles(count: number) {
     this.particles = [];
-    for (let i = 0; i < count; i++) {
+    
+    const sphereCount = Math.floor(count * 0.65);
+    const ringCount = count - sphereCount;
+
+    // Stable Normalized Sphere
+    for (let i = 0; i < sphereCount; i++) {
       const u = Math.random();
       const v = Math.random();
       const theta = u * 2.0 * Math.PI;
       const phi = Math.acos(2.0 * v - 1.0);
-      const r = Math.cbrt(Math.random()) * this.baseRadius;
-
-      const baseX = r * Math.sin(phi) * Math.cos(theta);
-      const baseY = r * Math.sin(phi) * Math.sin(theta);
-      const baseZ = r * Math.cos(phi);
+      const r = Math.cbrt(Math.random()); 
 
       this.particles.push({
-        baseX, baseY, baseZ,
-        size: Math.random() * 1.2 + 0.2, // Tiny, sharp stars
-        randomOffset: Math.random() * Math.PI * 2
+        x: r * Math.sin(phi) * Math.cos(theta),
+        y: r * Math.sin(phi) * Math.sin(theta),
+        z: r * Math.cos(phi),
+        size: Math.random() * 1.0 + 0.3, 
+        randomOffset: Math.random() * Math.PI * 2,
+        orbitalRadius: r,
+        orbitalSpeed: 1.0,
+        isRingParticle: false,
+        history: []
       });
     }
-  }
 
-  private updateAudioForPhase(phase: OrbPhase) {
-    if (!this.audioCtx || !this.oscillator || !this.filterNode) return;
-    const t = this.audioCtx.currentTime;
-    const freqByPhase: Record<OrbPhase, number> = {
-      standby: 110, listening: 146.83, thinking: 174.61,
-      boardroom: 220, executing: 196, error: 87.31,
-    };
-    this.oscillator.frequency.linearRampToValueAtTime(freqByPhase[phase], t + 0.8);
-    this.filterNode.frequency.linearRampToValueAtTime(
-      phase === "boardroom" ? 1800 : phase === "error" ? 400 : 800, t + 0.8
-    );
-  }
+    // Stable Saturn Accretion Ring 
+    for (let i = 0; i < ringCount; i++) {
+      const initialTheta = Math.random() * 2.0 * Math.PI;
+      const r = 1.15 + Math.random() * 0.45; // Locked inner/outer margin expansion thresholds
+      const keplerSpeed = Math.sqrt(1.0 / r) * 1.2;
 
-  private hexToRgba(hex: string, alpha: number): string {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${alpha})`;
+      this.particles.push({
+        x: r * Math.cos(initialTheta),
+        y: (Math.random() - 0.5) * 0.02, 
+        z: r * Math.sin(initialTheta),
+        size: Math.random() * 0.8 + 0.2,
+        randomOffset: initialTheta, // Bind offset cleanly to angle trajectory
+        orbitalRadius: r,
+        orbitalSpeed: keplerSpeed,
+        isRingParticle: true,
+        history: []
+      });
+    }
   }
 
   private render() {
@@ -236,75 +197,96 @@ export class KineticOrb {
     const w = this.canvas.width / this.dpr;
     const h = this.canvas.height / this.dpr;
 
-    // Completely clear the canvas. No solid backgrounds.
     ctx.clearRect(0, 0, w, h);
 
     const colors = PHASE_COLORS[this.phase];
     const pulse = Math.sin(this.time * this.pulseFrequency) * 0.5 + 0.5;
 
-    // ── Faint Deep Space Nebula Glow ──
+    // Soft Static Background Ambient Glow (Damped)
     const glowGrad = ctx.createRadialGradient(
       this.centerX, this.centerY, this.baseRadius * 0.1,
-      this.centerX, this.centerY, this.baseRadius * 1.5
+      this.centerX, this.centerY, this.baseRadius * 1.3
     );
-    glowGrad.addColorStop(0, this.hexToRgba(colors.mid, 0.2 * this.energy + 0.05));
+    glowGrad.addColorStop(0, this.hexToRgba(colors.mid, 0.15 * this.energy + 0.03));
     glowGrad.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = glowGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // ── 3D Rotation Matrix ──
-    // Slow, ominous rotation on two axes
-    const rotY = this.time * 0.2;
-    const rotX = this.time * 0.1;
-    const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
-    const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+    // Uniform rotational matrix velocities
+    const sphereRotY = this.time * 0.4;
+    const ringRotY = this.time * 0.6;
+    const globalTiltX = 0.40; // Flat, clean isometric perspective slant
+    const cosX = Math.cos(globalTiltX), sinX = Math.sin(globalTiltX);
+    
+    const fov = 600;
+    const globalScale = 1.0 + (this.energy * 0.12) + (pulse * 0.02);
 
     for (const p of this.particles) {
-      // Internal particle jitter based on energy
-      const jitter = Math.sin(this.time * 2 + p.randomOffset) * 8 * this.energy;
+      let calcX = p.x;
+      let calcY = p.y;
+      let calcZ = p.z;
+
+      let currentRotY = sphereRotY;
+
+      if (p.isRingParticle) {
+        const ringTheta = ringRotY * p.orbitalSpeed + p.randomOffset;
+        // Tight vertical wave harmonic ripples - completely prevents exploding particles
+        const verticalWave = Math.sin(this.time * 2.0 + p.orbitalRadius * 5.0) * (0.02 * this.energy);
+        
+        calcX = p.orbitalRadius * Math.cos(ringTheta);
+        calcY = p.y + verticalWave;
+        calcZ = p.orbitalRadius * Math.sin(ringTheta);
+        currentRotY = 0; 
+      } else {
+        // Soft matrix micro-jitter (Locked down to safe scaling thresholds)
+        const jitter = Math.sin(this.time * 2.0 + p.randomOffset) * (0.03 * this.energy);
+        calcY += jitter;
+      }
+
+      // Compute Rotations cleanly relative to base scalar vectors
+      const cosY = Math.cos(currentRotY), sinY = Math.sin(currentRotY);
       
-      let x = p.baseX;
-      let y = p.baseY + jitter;
-      let z = p.baseZ;
+      let rx = calcX * cosY - calcZ * sinY;
+      let rz = calcX * sinY + calcZ * cosY;
 
-      // Rotate around Y axis
-      let rx = x * cosY - z * sinY;
-      let rz = x * sinY + z * cosY;
+      let ry = calcY * cosX - rz * sinX;
+      rz = calcY * sinX + rz * cosX;
 
-      // Rotate around X axis
-      let ry = y * cosX - rz * sinX;
-      rz = y * sinX + rz * cosX;
+      // Project absolute bounds based on responsive window baseline limits
+      rx *= this.baseRadius * globalScale;
+      ry *= this.baseRadius * globalScale;
+      rz *= this.baseRadius * globalScale;
 
-      // Energy expansion (breathes outward)
-      const scale = 1 + (this.energy * 0.3) + (pulse * 0.05);
-      rx *= scale;
-      ry *= scale;
-      rz *= scale;
-
-      // 3D to 2D Perspective Projection
-      const fov = 800;
       const zOffset = fov + rz;
-      
-      // Cull particles behind the camera
-      if (zOffset < 10) continue; 
+      if (zOffset < 10) continue;
 
-      const projScale = fov / zOffset;
-      const finalX = this.centerX + rx * projScale;
-      const finalY = this.centerY + ry * projScale;
+      let projScale = fov / zOffset;
+      let finalX = this.centerX + rx * projScale;
+      let finalY = this.centerY + ry * projScale;
 
-      // Depth fading (particles further back fall into shadow)
-      const depthAlpha = Math.max(0, Math.min(1, (rz + this.baseRadius * 1.5) / (this.baseRadius * 3)));
-      const alpha = depthAlpha * (0.4 + this.energy * 0.6);
-      
-      // Dynamic sizing based on perspective
+      // Controlled Einsteinian Lensing Offset Loop
+      if (rz < 0) { 
+        const dx = finalX - this.centerX;
+        const dy = finalY - this.centerY;
+        const distanceToCore = Math.sqrt(dx * dx + dy * dy);
+        const einsteinRadius = (this.baseRadius * 0.2) * this.energy; 
+        
+        if (distanceToCore > 2 && distanceToCore < einsteinRadius * 2.0) {
+          const warpFactor = 1.0 + (einsteinRadius * einsteinRadius) / (distanceToCore * distanceToCore + 10);
+          finalX = this.centerX + dx * warpFactor * 0.95;
+          finalY = this.centerY + dy * warpFactor * 0.95;
+        }
+      }
+
+      const depthAlpha = Math.max(0, Math.min(1, (rz + this.baseRadius * 1.5) / (this.baseRadius * 3.0)));
+      const alpha = depthAlpha * (0.35 + this.energy * 0.45);
       const finalSize = Math.max(0.1, p.size * projScale);
 
       ctx.globalAlpha = alpha;
       
-      // Highlight a small percentage of front-facing particles to mimic the bright white stars in the reference
-      if (depthAlpha > 0.8 && Math.random() > 0.96) {
+      if (!p.isRingParticle && depthAlpha > 0.85 && Math.random() > 0.97) {
         ctx.fillStyle = "#ffffff";
-        ctx.globalAlpha = Math.min(1, alpha * 2);
+        ctx.globalAlpha = Math.min(1.0, alpha * 1.8);
       } else {
         ctx.fillStyle = colors.core;
       }
@@ -315,5 +297,12 @@ export class KineticOrb {
     }
     
     ctx.globalAlpha = 1.0; 
+  }
+
+  private hexToRgba(hex: string, alpha: number): string {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
   }
 }

@@ -1,27 +1,25 @@
 // src/main.ts
-// Project VERA — Frontend Application Controller
+// Project VERA — Frontend Application Controller (Fully Functional Multi-Node HUD Patch)
 
 import "./styles/main.css";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
-import { KineticOrb } from "./lib/orb"; // Match your actual folder path to orb.ts
+import { KineticOrb } from "./lib/orb"; 
 import { parseVeraMarkdown } from "./lib/formatter";
 
 // ─── Global State ─────────────────────────────────────────────────────────────
 let currentDeliberationSpeed = 0.05;
 let currentOrbColor = 'rgba(138, 43, 226,'; 
-let commandHistory: string[] = []; // Tracks your past submitted prompts
-let historyIndex = -1;             // Tracks where you are when tapping up/down
-let temporaryInputCache = "";      // Stores what you typed before hitting Arrow Up
+let commandHistory: string[] = []; 
+let historyIndex = -1;             
+let temporaryInputCache = "";      
 let speechEngine: any = null;
-let isRecordingVoice = false;
-let isVoiceCallMode = false;
-let isMuted = false;
+let isVoiceCallMode = false; 
 let voiceController: AbortController | null = null;
 
 const LOCAL_TTS_URL = "http://localhost:8880/v1/audio/speech";
-const KOKORO_VOICE_ID = "af_bella"; // Crisp, natural, human sci-fi profile
+const KOKORO_VOICE_ID = "af_bella"; 
 let currentAudioPlayback: HTMLAudioElement | null = null;
 
 // ─── UI Utilities ─────────────────────────────────────────────────────────────
@@ -36,7 +34,6 @@ function startHudClock() {
 }
 
 // ─── Telemetry Loop ───────────────────────────────────────────────────────────
-// Cache state locally to prevent redundant DOM style injections
 let lastRenderedTier = -1;
 let lastRenderedVault = "";
 
@@ -46,65 +43,75 @@ async function startTelemetryLoop() {
       const telemetry: any = await invoke("get_orb_telemetry");
       const vaultPath: any = await invoke("get_vault_path");
 
-      const elAgents = document.getElementById("telemetry-agents");
-      const elTokens = document.getElementById("telemetry-tokens");
+      const elTokens = document.getElementById("vital-tokens");
       const elLatency = document.getElementById("telemetry-latency");
       const elVault = document.getElementById("telemetry-vault");
       const chatWrapper = document.getElementById("hud-chat-wrapper");
       const transcriptPanel = document.getElementById("boardroom-panel");
 
-      // 1. HARD VISIBILITY LOCK OVERRIDE 
+      // FIXED: Element mappings paired with the true HTML IDs
+      const elComputeLoad = document.getElementById("vital-compute");
+      const elContextWindow = document.getElementById("vital-context");
+      const elUplinkStatus = document.getElementById("uplink-status-text");
+      const elActiveRunners = document.getElementById("telemetry-runners");
+
+      // FIXED: Daemon Checklist nodes linked directly to state properties
+      const cbRegistrySync = document.getElementById("cb-registry-sync") as HTMLInputElement | null;
+      const cbObsidianBridge = document.getElementById("cb-obsidian-bridge") as HTMLInputElement | null;
+      const cbDiskWatchdog = document.getElementById("cb-disk-watchdog") as HTMLInputElement | null;
+
       if (isVoiceCallMode) {
-        // Slam the panel shut every single tick regardless of what other stream functions want
         if (transcriptPanel) {
           transcriptPanel.style.display = "none"; 
           transcriptPanel.classList.add("hidden");
         }
-        currentOrbColor = 'rgba(255, 255, 255,'; // White Starfield for Call Mode
+        currentOrbColor = 'rgba(255, 255, 255,'; 
       } else {
-        if (transcriptPanel) {
-          // Restore standard styles only when call mode disengages
+        if (transcriptPanel && !transcriptPanel.classList.contains("hidden")) {
           transcriptPanel.style.display = ""; 
         }
       }
 
       if (telemetry && telemetry.data) {
-        // 2. Instantly flush text metrics to DOM panels (keeps tracking active)
-        if (elAgents) elAgents.innerText = telemetry.data.active_agents.toString();
-        if (elTokens) elTokens.innerText = telemetry.data.tokens_processed.toString();
+        if (elTokens) elTokens.innerText = telemetry.data.tokens_processed.toLocaleString();
         if (elLatency) elLatency.innerText = telemetry.data.latency_ms + "ms";
+        
+        // Populate core vitals panel with zero truncation errors
+        if (elComputeLoad) elComputeLoad.innerText = (telemetry.data.compute_load || "0.00") + "%";
+        if (elContextWindow) elContextWindow.innerText = (telemetry.data.context_window_pct || "0") + "%";
+        if (elActiveRunners) elActiveRunners.innerText = (telemetry.data.active_runners || "0").toString();
+        if (elUplinkStatus) elUplinkStatus.innerText = isVoiceCallMode ? "VOICE SESSION" : (telemetry.data.uplink_status || "STANDBY");
 
-        // Skew kinetic velocity mechanics dynamically based on system latency
+        // Dynamically shift UI daemon checkboxes
+        if (cbRegistrySync) cbRegistrySync.checked = !!telemetry.data.daemon_registry_sync;
+        if (cbObsidianBridge) cbObsidianBridge.checked = !!telemetry.data.daemon_obsidian_bridge;
+        if (cbDiskWatchdog) cbDiskWatchdog.checked = !!telemetry.data.daemon_disk_watchdog;
+
         currentDeliberationSpeed = telemetry.data.latency_ms < 500 ? 0.1 : 0.02;
-
         const currentTier = telemetry.data.active_tier;
 
-        // 3. Batch styling routines strictly on system state transformations
         if (currentTier !== lastRenderedTier || isVoiceCallMode) {
-          lastRenderedTier = isVoiceCallMode ? -2 : currentTier; // Shift check flag if mode overrides it
-          
+          lastRenderedTier = isVoiceCallMode ? -2 : currentTier; 
           let glowShadow = '';
           
           if (!isVoiceCallMode) {
-            // VERA HUD CORE PIXEL MATRIX TIER MONITOR INTEGRATION
             if (currentTier === 1) {
-                currentOrbColor = 'rgba(0, 255, 0,';   // Tier 1 Active -> Primary Core Green
-                glowShadow = 'rgba(0, 255, 0, 0.03)';
+              currentOrbColor = 'rgba(0, 255, 0,';   
+              glowShadow = 'rgba(0, 255, 0, 0.03)';
             } else if (currentTier === 2) {
-                currentOrbColor = 'rgba(255, 255, 0,'; // Tier 2 Active -> Quota Fallback Yellow
-                glowShadow = 'rgba(255, 255, 0, 0.03)';
+              currentOrbColor = 'rgba(255, 255, 0,'; 
+              glowShadow = 'rgba(255, 255, 0, 0.03)';
             } else if (currentTier === 3) {
-                currentOrbColor = 'rgba(255, 69, 0,';  // Tier 3 Active -> Local Anchor Orange/Red
-                glowShadow = 'rgba(255, 69, 0, 0.03)';
+              currentOrbColor = 'rgba(255, 69, 0,';  
+              glowShadow = 'rgba(255, 69, 0, 0.03)';
             } else {
-                currentOrbColor = 'rgba(138, 43, 226,'; // Neutral Idle -> Deep VERA Purple
-                glowShadow = 'rgba(138, 43, 226, 0.03)';
+              currentOrbColor = 'rgba(138, 43, 226,'; 
+              glowShadow = 'rgba(138, 43, 226, 0.03)';
             }
           } else {
             glowShadow = 'rgba(255, 255, 255, 0.03)';
           }
 
-          // Render viewport geometry inside hardware layout request frames
           if (chatWrapper) {
             requestAnimationFrame(() => {
               chatWrapper.style.boxShadow = `0 20px 50px ${glowShadow}`;
@@ -114,57 +121,15 @@ async function startTelemetryLoop() {
         }
       }
       
-      // 4. Cache validation for the system vault path string
       if (vaultPath && vaultPath.data && elVault && vaultPath.data !== lastRenderedVault) {
         lastRenderedVault = vaultPath.data;
         elVault.innerText = vaultPath.data;
       }
       
     } catch (err) {
-      console.error("Telemetry sync failed:", err);
-      currentOrbColor = 'rgba(255, 0, 0,'; // Critical Network/API Failure -> Blood Red
-      lastRenderedTier = -1; // Force state invalidation so recovery path clears seamlessly
-      
-      const chatWrapper = document.getElementById("hud-chat-wrapper");
-      if (chatWrapper) {
-        requestAnimationFrame(() => {
-          chatWrapper.style.boxShadow = '0 20px 50px rgba(255, 0, 0, 0.05)';
-          chatWrapper.style.borderColor = 'rgba(255, 0, 0, 0.15)';
-        });
-      }
+      console.error("Telemetry loop faulted:", err);
     }
   }, 1000);
-}
-
-// ─── Kinetic Orb Renderer ──────────────────────────────────────────────────
-export function initOrbRenderer(canvasId: string) {
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let pulsePhase = 0;
-
-    function draw() {
-        ctx!.clearRect(0, 0, canvas!.width, canvas!.height);
-        
-        pulsePhase += currentDeliberationSpeed; 
-        const radius = 40 + Math.sin(pulsePhase) * 8; 
-        const glow = 15 + Math.sin(pulsePhase) * 10;  
-
-        ctx!.beginPath();
-        ctx!.arc(canvas!.width / 2, canvas!.height / 2, radius, 0, Math.PI * 2);
-        ctx!.fillStyle = `${currentOrbColor} 0.8)`;
-        ctx!.shadowColor = `${currentOrbColor} 1.0)`;
-        ctx!.shadowBlur = glow;
-        ctx!.fill();
-        ctx!.closePath();
-
-        requestAnimationFrame(draw);
-    }
-
-    draw();
 }
 
 // ─── Boardroom Listeners ─────────────────────────────────────────────────────
@@ -178,11 +143,9 @@ async function wireBoardroomListeners() {
     closeBtn.addEventListener("click", () => panel.classList.add("hidden"));
   }
 
-  // Hook into native backend boardroom events
   await listen("boardroom:start", (event: any) => {
     if (panel && transcript && resultBox) {
       panel.classList.remove("hidden");
-      // Formats the initial prompt string if it has code tokens or backticks
       transcript.innerHTML = `<div><span class="text-purple-400">[SYSTEM]</span> Commencing triage for: ${parseVeraMarkdown(event.payload)}</div>`;
       resultBox.innerText = "Awaiting consensus...";
     }
@@ -193,7 +156,6 @@ async function wireBoardroomListeners() {
       const msg = event.payload;
       const div = document.createElement("div");
       div.className = "my-1";
-      // Formats the live text streams emitted by active agents on the fly
       div.innerHTML = `<span class="text-blue-400">[${msg.agent_name} - ${msg.role}]</span> <div class="mt-0.5">${parseVeraMarkdown(msg.content)}</div>`;
       transcript.appendChild(div);
       transcript.scrollTop = transcript.scrollHeight;
@@ -203,11 +165,9 @@ async function wireBoardroomListeners() {
   await listen("boardroom:complete", (event: any) => {
     if (resultBox && transcript) {
       const pkg = event.payload;
-      resultBox.innerText = `[CONSENSUS REACHED] Executor: ${pkg.selected_executor}`;
-      
+      resultBox.innerText = `[CONSENSUS] Executor: ${pkg.selected_executor}`;
       const div = document.createElement("div");
       div.className = "text-emerald-400 mt-2 border-t border-zinc-800 pt-2";
-      // Formats final multi-line summary metrics or code blocks safely
       div.innerHTML = `<strong>Summary:</strong> <div>${parseVeraMarkdown(pkg.consensus_summary)}</div>`;
       transcript.appendChild(div);
       transcript.scrollTop = transcript.scrollHeight;
@@ -217,18 +177,15 @@ async function wireBoardroomListeners() {
 
 // ─── HUD IDLE WATCHDOG ──────────────────────────────────────────────────────
 let idleTimeout: number;
-const IDLE_TIME_MS = 6000; // Fades out after 6 seconds
+const IDLE_TIME_MS = 6000; 
 
 export function wakeUpHUD() {
   const chatWrapper = document.getElementById("hud-chat-wrapper");
-  
   if (chatWrapper) {
     chatWrapper.classList.remove("opacity-0");
     chatWrapper.classList.add("opacity-100");
   }
-
   clearTimeout(idleTimeout);
-
   idleTimeout = window.setTimeout(() => {
     if (chatWrapper) {
       chatWrapper.classList.remove("opacity-100");
@@ -248,7 +205,6 @@ function safelyKillAudioEngine() {
     currentAudioPlayback.src = "";
     currentAudioPlayback.load();
     currentAudioPlayback = null;
-    console.log("[VERA] Playback loop terminated via user interruption.");
   }
   if (voiceController) {
     voiceController.abort();
@@ -260,55 +216,78 @@ async function streamVeraVoiceOutput(text: string) {
   safelyKillAudioEngine();
   window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "executing" }));
   
-  // HARD SHIELD: Lock speech recognition out while audio plays to block self-hearing echo loops
   if (speechEngine) { try { speechEngine.stop(); } catch(e) {} }
-
   voiceController = new AbortController();
 
   try {
-    // Strip code blocks and raw markdown syntax to maintain clean human dialogue patterns
     const cleanTextForSpeech = text
-      .replace(/```[\s\S]*?```/g, "[Code configuration generated.]")
+      .replace(/```[\s\S]*?```/g, "[Code generated.]")
       .replace(/`([^`]+)`/g, "$1")
       .replace(/[*_#\-]/g, "");
 
     const response = await fetch(LOCAL_TTS_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "kokoro",
         input: cleanTextForSpeech,
         voice: KOKORO_VOICE_ID,
         response_format: "mp3",
-        speed: 1.05 // Sleek, slightly accelerated technical pacing
+        speed: 1.05 
       }),
       signal: voiceController.signal
     });
 
-    if (!response.ok) throw new Error(`TTS server rejected stream: ${response.status}`);
-
+    if (!response.ok) throw new Error(`TTS Status Fault: ${response.status}`);
     const blob = await response.blob();
     const audioUrl = URL.createObjectURL(blob);
     
     currentAudioPlayback = new Audio(audioUrl);
+
+    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+    const audioCtx = new AudioContextClass();
+    const source = audioCtx.createMediaElementSource(currentAudioPlayback);
+    const analyser = audioCtx.createAnalyser();
+    
+    analyser.fftSize = 64; 
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
+
+    const trackVolume = () => {
+      if (!currentAudioPlayback || currentAudioPlayback.paused) return;
+      analyser.getByteFrequencyData(dataArray);
+      let total = 0;
+      for (let i = 0; i < dataArray.length; i++) total += dataArray[i];
+      const averageVolume = total / dataArray.length;
+      
+      if ((window as any).VeraOrb) {
+        const dynamicEnergy = 1.2 + ((averageVolume / 255) * 2.5);
+        (window as any).VeraOrb.setEnergyFromVoice(dynamicEnergy);
+      }
+      requestAnimationFrame(trackVolume);
+    };
+
+    currentAudioPlayback.onplay = () => {
+      audioCtx.resume();
+      trackVolume();
+    };
     
     currentAudioPlayback.onended = () => {
+      if ((window as any).VeraOrb) (window as any).VeraOrb.setEnergyFromVoice(0);
       if (isVoiceCallMode) {
         window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "listening" }));
-        // RE-OPEN THE MICROPHONE CHANNEL: Ready for your next spoken command sentence
         if (speechEngine) { try { speechEngine.start(); } catch(e) {} }
       } else {
         window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "standby" }));
       }
+      audioCtx.close();
     };
 
     await currentAudioPlayback.play();
   } catch (err: any) {
-    if (err.name !== 'AbortError') {
-      console.error("[ERR] Audio playback channel broken:", err);
-    }
+    if (err.name !== 'AbortError') console.error("Audio pipeline failed:", err);
   }
 }
 
@@ -317,20 +296,15 @@ async function boot() {
   startHudClock();
   await wireBoardroomListeners();
   startTelemetryLoop();
-  wakeUpHUD(); // Initial wake
+  wakeUpHUD(); 
 
-  // Instantiate your native core engine
   const canvasEl = document.getElementById("orb-canvas") as HTMLCanvasElement | null;
   if (canvasEl) {
     const orb = new KineticOrb(canvasEl);
     orb.start();
-    
-    // Opt-in audio engine context on first interaction
     document.body.addEventListener("click", () => {
       orb.enableAudio().catch(err => console.error("Audio Context initialization blocked:", err));
     }, { once: true });
-
-    // Expose globally so startTelemetryLoop can update states via orb.setPhase()
     (window as any).VeraOrb = orb; 
   }
 
@@ -339,124 +313,135 @@ async function boot() {
   const modeSelector = document.getElementById("hud-execution-mode") as HTMLSelectElement | null;
   const modelTargetSelector = document.getElementById("hud-model-target") as HTMLSelectElement | null;
 
+  // FIXED: Bound functional listener nodes straight to layout Command Deck list buttons
+  const btnBoardroom = document.getElementById("deck-boardroom");
+  const btnRegistry = document.getElementById("deck-registry");
+  const btnVault = document.getElementById("deck-vault");
+  const btnClearMem = document.getElementById("deck-clear-memory");
+  const btnAttachment = document.getElementById("hud-attachment-btn");
+
+  if (btnBoardroom) {
+    btnBoardroom.addEventListener("click", () => {
+      if (commandInput) {
+        commandInput.value = "Initiate boardroom triage protocol regarding: ";
+        commandInput.focus();
+      }
+    });
+  }
+
+  if (btnRegistry) {
+    btnRegistry.addEventListener("click", async () => {
+      window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "thinking" }));
+      try {
+        await invoke("inspect_model_registry");
+      } catch (e) { console.error(e); }
+    });
+  }
+
+  if (btnVault) {
+    btnVault.addEventListener("click", async () => {
+      try {
+        await invoke("open_secure_vault_explorer");
+      } catch (e) { console.error(e); }
+    });
+  }
+
+  if (btnClearMem) {
+    btnClearMem.addEventListener("click", async () => {
+      if (confirm("Flush pipeline session history cache?")) {
+        try {
+          await invoke("flush_pipeline_memory");
+          const chatLog = document.getElementById("chat-log");
+          if (chatLog) chatLog.innerHTML = `<div class="text-zinc-600 font-mono text-[9px] uppercase">[SYSTEM CONTEXT FLUSHED CLEAN]</div>`;
+        } catch (e) { console.error(e); }
+      }
+    });
+  }
+
+  if (btnAttachment) {
+    btnAttachment.addEventListener("click", async () => {
+      try {
+        const path: string = await invoke("trigger_file_attachment_dialog");
+        if (path && commandInput) {
+          commandInput.value += ` [File: ${path}]`;
+        }
+      } catch (e) { console.error(e); }
+    });
+  }
+
   if (commandForm && commandInput) {
-
-    // ─── Absolute Voice Call Engine (ChatGPT/Gemini Architecture) ─────────────────
     const pttBtn = document.getElementById("hud-ptt-btn");
-
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    if (pttBtn && commandInput && commandForm) {
-      if (!SpeechRecognition) {
-        console.warn("Speech recognition engine not supported natively on this platform.");
-        pttBtn.classList.add("opacity-20", "cursor-not-allowed");
-      } else {
-        speechEngine = new SpeechRecognition();
-        speechEngine.continuous = true;
-        speechEngine.interimResults = false; 
-        speechEngine.lang = "en-US";
+    if (pttBtn && SpeechRecognition) {
+      speechEngine = new SpeechRecognition();
+      speechEngine.continuous = true;
+      speechEngine.interimResults = false; 
+      speechEngine.lang = "en-US";
 
-        // Handle incoming transcribed voice chunks
-        speechEngine.onresult = (event: any) => {
-          // ANTI-ECHO PROTECTION GUARD: If VERA is currently talking, completely drop the payload
-          if (currentAudioPlayback && !currentAudioPlayback.paused) {
-            return;
-          }
+      speechEngine.onresult = (event: any) => {
+        if (currentAudioPlayback && !currentAudioPlayback.paused) return;
+        let liveTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) liveTranscript += event.results[i][0].transcript;
+        }
+        if (liveTranscript.trim()) {
+          commandInput.value = liveTranscript;
+          try { speechEngine.stop(); } catch(e) {}
+          window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "thinking" }));
+          commandForm.dispatchEvent(new Event("submit"));
+        }
+      };
 
-          let liveTranscript = "";
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              liveTranscript += event.results[i][0].transcript;
-            }
-          }
-          
-          if (liveTranscript.trim()) {
-            console.log("[VERA Voice Capture]:", liveTranscript);
-            commandInput.value = liveTranscript;
-            
-            // Temporarily pause speech engine during submission to prevent dual execution locks
-            try { speechEngine.stop(); } catch(e) {}
-            
-            window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "thinking" }));
-            commandForm.dispatchEvent(new Event("submit"));
-          }
-        };
+      speechEngine.onend = () => {
+        if (isVoiceCallMode) { try { speechEngine.start(); } catch(e) {} }
+      };
 
-        speechEngine.onend = () => {
-          // Loop the microphone listening channel if call session stays active
-          if (isVoiceCallMode) {
-            try { speechEngine.start(); } catch(e) {}
-          }
-        };
-
-        speechEngine.onerror = (err: any) => {
-          if (err.error !== 'not-allowed') {
-            console.error("Voice Engine Subsystem Error:", err.error);
-          }
-        };
-
-        // SINGLE TAP CONTROLLER: Dedicated session initialization
-        pttBtn.addEventListener("click", (e) => {
-          e.preventDefault();
-          
-          // 1. INTERRUPT TRIGGER: If she is speaking, a click cuts her audio instantly
-          if (currentAudioPlayback && !currentAudioPlayback.paused) {
-            safelyKillAudioEngine();
-            window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "listening" }));
-            try { speechEngine.start(); } catch(e) {}
-            return;
-          }
-
-          isVoiceCallMode = !isVoiceCallMode;
-
-          if (isVoiceCallMode) {
-            console.log("[VERA] Continuous Voice Call Activated, Sir.");
-            
-            // Establish crisp visual presentation mask properties
-            pttBtn.style.background = "rgba(138, 43, 226, 0.4)";
-            pttBtn.style.borderColor = "#8a2be2";
-            pttBtn.style.color = "#ffffff";
-            
-            const transcriptPanel = document.getElementById("boardroom-panel");
-            if (transcriptPanel) {
-              transcriptPanel.style.display = "none";
-              transcriptPanel.classList.add("hidden");
-            }
-
-            window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "listening" }));
-            try { speechEngine.start(); } catch(e) {}
-          } else {
-            console.log("[VERA] Voice Call Deactivated, Sir.");
-            
-            // Reset element style parameters cleanly
-            pttBtn.style.background = "";
-            pttBtn.style.borderColor = "";
-            pttBtn.style.color = "";
-            
-            const transcriptPanel = document.getElementById("boardroom-panel");
-            if (transcriptPanel) {
-              transcriptPanel.style.display = "";
-              transcriptPanel.classList.remove("hidden");
-            }
-
-            window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "standby" }));
-            try { speechEngine.stop(); } catch(e) {}
-            safelyKillAudioEngine();
-          }
-        });
-      }
-    }
-
-    // ─── Command History Keyboard Listener ───────────────────────────────────
-    commandInput.addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.key === "ArrowUp") {
-        e.preventDefault(); // Prevent cursor jumping to the front of the text line
-        if (commandHistory.length === 0) return;
-
-        if (historyIndex === -1) {
-          temporaryInputCache = commandInput.value;
+      pttBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (currentAudioPlayback && !currentAudioPlayback.paused) {
+          safelyKillAudioEngine();
+          window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "listening" }));
+          try { speechEngine.start(); } catch(e) {}
+          return;
         }
 
+        isVoiceCallMode = !isVoiceCallMode;
+
+        if (isVoiceCallMode) {
+          pttBtn.style.background = "rgba(138, 43, 226, 0.4)";
+          pttBtn.style.borderColor = "#8a2be2";
+          pttBtn.style.color = "#ffffff";
+          
+          const transcriptPanel = document.getElementById("boardroom-panel");
+          if (transcriptPanel) {
+            transcriptPanel.style.display = "none";
+            transcriptPanel.classList.add("hidden");
+          }
+          window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "listening" }));
+          try { speechEngine.start(); } catch(e) {}
+        } else {
+          pttBtn.style.background = "";
+          pttBtn.style.borderColor = "";
+          pttBtn.style.color = "";
+          
+          const transcriptPanel = document.getElementById("boardroom-panel");
+          if (transcriptPanel) {
+            transcriptPanel.style.display = "none";
+            transcriptPanel.classList.add("hidden");
+          }
+          window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "standby" }));
+          try { speechEngine.stop(); } catch(e) {}
+          safelyKillAudioEngine();
+        }
+      });
+    }
+
+    commandInput.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (commandHistory.length === 0) return;
+        if (historyIndex === -1) temporaryInputCache = commandInput.value;
         if (historyIndex < commandHistory.length - 1) {
           historyIndex++;
           commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
@@ -464,7 +449,6 @@ async function boot() {
       } 
       else if (e.key === "ArrowDown") {
         e.preventDefault();
-
         if (historyIndex > 0) {
           historyIndex--;
           commandInput.value = commandHistory[commandHistory.length - 1 - historyIndex];
@@ -480,22 +464,20 @@ async function boot() {
       const value = commandInput.value.trim();
       if (!value) return;
 
-      // Track prompt state variables in history cache layers on commit
       commandHistory.push(value);
       historyIndex = -1;
       temporaryInputCache = "";
-
       commandInput.value = "";
       
       const selectedMode = modeSelector ? modeSelector.value : "single";
       const chosenModel = modelTargetSelector ? modelTargetSelector.value : "VERA-Triage";
       const chatLog = document.getElementById("chat-log");
 
-      // 1. Create a persistent wrapper frame for this interactive turn
+      window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "thinking" }));
+
       const turnWrapper = document.createElement("div");
       turnWrapper.className = "flex flex-col my-3";
       
-      // Append user entry segment
       const userBox = document.createElement("div");
       userBox.className = "group relative text-zinc-400 font-mono my-1 pl-2 border-l border-zinc-800 flex flex-col";
       userBox.innerHTML = `
@@ -505,7 +487,6 @@ async function boot() {
         </div>
       `;
 
-      // Bind edit click inline
       userBox.querySelector(".edit-trigger")?.addEventListener("click", () => {
         commandInput.value = value;
         commandInput.focus();
@@ -521,27 +502,24 @@ async function boot() {
 
       try {
         if (selectedMode === "agentic" || value.toLowerCase().includes("boardroom")) {
+          window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "boardroom" }));
           await invoke("run_boardroom_debate", { task: value });
         } else {
-          
-          // src/main.ts -> Inside commandForm submit listener
           const response: any = await invoke("send_fast_message", { 
             message: value, 
             targetModel: chosenModel 
           });
-          
           const outputText = response.data || response;
           
           if (isVoiceCallMode) {
-            // NEW: Divert text straight down to zero-latency immersive audio stream pipeline
             await streamVeraVoiceOutput(outputText);
           } else {
-            // Standard Text Output Vocalization Fallback Layer
             try {
               if (currentAudioPlayback) {
                 currentAudioPlayback.pause();
                 currentAudioPlayback.src = "";
               }
+              window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "executing" }));
 
               const cleanTextForSpeech = outputText
                 .replace(/```[\s\S]*?```/g, "[Code configuration generated.]")
@@ -550,9 +528,7 @@ async function boot() {
 
               const localTtsResponse = await fetch(LOCAL_TTS_URL, {
                 method: "POST",
-                headers: {
-                  "Content-Type": "application/json"
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   model: "kokoro",
                   input: cleanTextForSpeech,
@@ -563,19 +539,20 @@ async function boot() {
               });
 
               if (!localTtsResponse.ok) throw new Error(`Local TTS Node Fault: ${localTtsResponse.status}`);
-
               const audioBlob = await localTtsResponse.blob();
               const audioUrl = URL.createObjectURL(audioBlob);
               
               currentAudioPlayback = new Audio(audioUrl);
-              currentAudioPlayback.play().catch(e => console.error("Local audio stream playback initialization blocked:", e));
-
+              currentAudioPlayback.onended = () => {
+                window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "standby" }));
+              };
+              await currentAudioPlayback.play();
             } catch (speechErr) {
-              console.error("Local Kokoro pipeline failed to vocalize output sequence:", speechErr);
+              console.error(speechErr);
+              window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "standby" }));
             }
           }
           
-          // 3. Append VERA Response Frame straight into the current active turnWrapper
           const veraBox = document.createElement("div");
           veraBox.className = "group relative text-zinc-300 font-mono my-2 bg-zinc-950/40 p-2 rounded border border-zinc-900/50 flex flex-col";
           veraBox.innerHTML = `
@@ -586,23 +563,17 @@ async function boot() {
             </div>
           `;
 
-          // Bind Copy Utility
           veraBox.querySelector(".copy-trigger")?.addEventListener("click", async (btnEvent) => {
             try {
               await navigator.clipboard.writeText(outputText);
               (btnEvent.target as HTMLButtonElement).innerText = "[Copied!]";
               setTimeout(() => { 
-                if (veraBox) {
-                  const btn = veraBox.querySelector(".copy-trigger") as HTMLButtonElement;
-                  if (btn) btn.innerText = "[Copy]";
-                }
+                const btn = veraBox.querySelector(".copy-trigger") as HTMLButtonElement;
+                if (btn) btn.innerText = "[Copy]";
               }, 1200);
-            } catch (err) {
-              console.error("Clipboard operational write failure:", err);
-            }
+            } catch (err) { console.error(err); }
           });
 
-          // Bind Retry Utility
           veraBox.querySelector(".retry-trigger")?.addEventListener("click", () => {
             turnWrapper.remove();
             commandInput.value = value;
@@ -616,82 +587,32 @@ async function boot() {
           }
         }
       } catch (err) {
-        console.error("Pipeline Execution Error:", err);
-        const errBox = document.createElement("div");
-        errBox.className = "text-red-400 font-mono my-1 text-xs pl-2 border-l border-red-900/40 flex items-center gap-2";
-        errBox.innerHTML = `
-          <span><span class="text-red-500 font-bold">❌ MATRIX CRITICAL ERR:</span> ${err}</span>
-          <button class="err-retry border border-zinc-800 px-1 rounded bg-black/20 text-[9px] hover:text-red-400 transition-colors cursor-pointer titlebar-no-drag">RETRY</button>
-        `;
-        
-        errBox.querySelector(".err-retry")?.addEventListener("click", () => {
-          turnWrapper.remove();
-          commandInput.value = value;
-          commandForm.dispatchEvent(new Event("submit"));
-        });
-
-        turnWrapper.appendChild(errBox);
-        if (chatLog) {
-          chatLog.scrollTop = chatLog.scrollHeight;
-          wakeUpHUD();
-        }
+        console.error(err);
+        window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "error" }));
       }
     });
   }
 
-  // Native Command Deck Boardroom Manual Override Button
-  const boardroomBtn = document.getElementById("boardroom-trigger");
-  if (boardroomBtn) {
-    boardroomBtn.addEventListener("click", async () => {
-      console.log("Forcing boardroom invocation sequence via Command Deck...");
-      try {
-        await invoke("run_boardroom_debate", { 
-          task: "Execute complete system architecture sweep and evaluate node context constraints." 
-        });
-      } catch (err) {
-        console.error("Failed to execute boardroom pipeline:", err);
-      }
-    });
-  }
+  // Window frame controller events
+  document.getElementById('btn-minimize')?.addEventListener('click', async () => { await getCurrentWindow().minimize(); });
+  document.getElementById('btn-maximize')?.addEventListener('click', async () => {
+    const win = getCurrentWindow();
+    (await win.isMaximized()) ? await win.unmaximize() : await win.maximize();
+  });
+  document.getElementById('btn-close')?.addEventListener('click', async () => { await getCurrentWindow().close(); });
 }
 
-// ─── Document Lifecycle ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   boot();
-
-  const appWindow = getCurrentWindow();
   const header = document.querySelector('header');
-
-  // NATIVE WINDOW DRAGGING CORE
   if (header) {
     header.addEventListener('mousedown', async (e) => {
       const target = e.target as HTMLElement;
-      if (target.closest('.titlebar-no-drag') || target.closest('button') || target.closest('select') || target.closest('input')) {
-        return;
-      }
-      
+      if (target.closest('.titlebar-no-drag') || target.closest('button') || target.closest('select') || target.closest('input')) return;
       if (e.buttons === 1) {
         e.preventDefault();
-        await appWindow.startDragging();
+        await getCurrentWindow().startDragging();
       }
     });
   }
-
-  // MINIMIZE, EXIT, FULLSCREEN EVENT LISTENERS
-  document.getElementById('btn-minimize')?.addEventListener('click', async () => {
-    await appWindow.minimize();
-  });
-
-  document.getElementById('btn-maximize')?.addEventListener('click', async () => {
-    const isMaximized = await appWindow.isMaximized();
-    if (isMaximized) {
-      await appWindow.unmaximize();
-    } else {
-      await appWindow.maximize();
-    }
-  });
-
-  document.getElementById('btn-close')?.addEventListener('click', async () => {
-    await appWindow.close();
-  });
 });

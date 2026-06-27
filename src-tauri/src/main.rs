@@ -10,6 +10,7 @@ mod models;
 mod obsidian;
 mod registry;
 mod daemon;
+//mod audio;
 
 use boardroom::BoardroomEngine;
 use crate::registry::ModelRegistry;
@@ -24,6 +25,11 @@ use tauri::{Manager, State, Emitter};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 use notify::{Watcher, RecursiveMode, Result as NotifyResult};
+
+// ─── ADDED FOR FILE SYSTEM ACCESS ─────────────────────────────────────────────
+use std::fs;
+use std::path::{Path, PathBuf};
+// ──────────────────────────────────────────────────────────────────────────────
 
 // ─── Application State ────────────────────────────────────────────────────────
 
@@ -266,6 +272,59 @@ async fn set_window_mode(
     Ok(())
 }
 
+// ─── ADDED FILE SYSTEM SELF-ACCESS COMMANDS ───────────────────────────────────
+
+fn get_workspace_root() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+#[tauri::command]
+async fn vera_read_file(relative_path: String) -> Result<String, String> {
+    let safe_path = get_workspace_root().join(&relative_path);
+    if !safe_path.starts_with(get_workspace_root()) {
+        return Err("ACCESS DENIED: Operations restricted to workspace root context.".into());
+    }
+    fs::read_to_string(safe_path).map_err(|e| format!("FS Read Error: {}", e))
+}
+
+#[tauri::command]
+async fn vera_write_file(relative_path: String, content: String) -> Result<(), String> {
+    let safe_path = get_workspace_root().join(&relative_path);
+    if !safe_path.starts_with(get_workspace_root()) {
+        return Err("ACCESS DENIED: Workspace boundary lock violation.".into());
+    }
+    fs::write(safe_path, content).map_err(|e| format!("FS Write Failure: {}", e))
+}
+
+#[tauri::command]
+async fn vera_scan_tree() -> Result<Vec<String>, String> {
+    let mut manifest = Vec::new();
+    let root = get_workspace_root();
+    
+    fn recurse_dir(dir: &Path, manifest: &mut Vec<String>, root: &Path) -> std::io::Result<()> {
+        if dir.is_dir() {
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    if name != "node_modules" && name != "target" && name != ".git" && name != "dist" {
+                        recurse_dir(&path, manifest, root)?;
+                    }
+                } else {
+                    if let Ok(rel) = path.strip_prefix(root) {
+                        manifest.push(rel.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    recurse_dir(&root, &mut manifest, &root).map_err(|e| e.to_string())?;
+    Ok(manifest)
+}
+
 // ─── Helper Functions ─────────────────────────────────────────────────────────
 
 fn classify_intent(msg: &str) -> &'static str {
@@ -409,6 +468,12 @@ fn main() {
             get_vault_path,
             send_fast_message,
             set_window_mode,
+            //audio::start_audio_capture,
+            //audio::stop_audio_capture,
+            // ADDED FILE SYSTEM COMMANDS HERE
+            vera_read_file,
+            vera_write_file,
+            vera_scan_tree
         ])
         .run(tauri::generate_context!())
         .expect("error while running VERA application");

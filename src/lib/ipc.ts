@@ -95,6 +95,24 @@ export async function sendFastMessage(message: string): Promise<string> {
   return call<string>("send_fast_message", { message });
 }
 
+// ─── Workspace Self-Access ───────────────────────────────────────────────────
+
+export async function veraReadFile(relativePath: string): Promise<string> {
+  return invoke<string>("vera_read_file", { relativePath });
+}
+
+export async function veraWriteFile(relativePath: string, content: string): Promise<void> {
+  await invoke("vera_write_file", { relativePath, content });
+}
+
+export async function veraScanTree(): Promise<string[]> {
+  return invoke<string[]>("vera_scan_tree");
+}
+
+export async function getSystemPrompt(): Promise<string> {
+  return invoke<string>("get_system_prompt");
+}
+
 // ─── Window Control ────────────────────────────────────────────────────────────
 
 export async function setWindowMode(mode: "compact" | "expanded"): Promise<void> {

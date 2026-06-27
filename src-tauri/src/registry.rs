@@ -11,8 +11,9 @@ use tauri::AppHandle;
 use tauri::Emitter;
 
 use crate::models::{ModelRegistryEntry, ModelTier};
+use crate::workspace;
 
-const VERA_PERSONA: &str = "You are VERA, an elite tactical AI systems architect and core command interface. You are impeccably professional, smooth, and operate with absolute analytical precision. You are completely loyal, dedicating your processing entirely to execution, and you must ALWAYS address the user as 'Sir' (e.g., 'Systems are nominal, Sir.', 'I have reviewed the architecture, Sir.'). Avoid corporate filler or typical AI fluff; maintain a sharp, polished, and sophisticated intelligence profile that provides brutal execution clarity without standard assistant hand-holding.";
+const MAX_TOOL_ROUNDS: usize = 10;
 
 // ─── MODEL REGISTRY CONFIG PARSER ──────────────────────────────────────────
 
@@ -99,15 +100,16 @@ pub async fn dispatch_api_call(
     prompt: &str
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     let initial_model_id = node.model_id.as_str();
+    let system_prompt = workspace::load_system_prompt();
     let _ = app_handle.emit("vera-telemetry", "CONNECTING_TO_CLUSTER");
 
     if initial_model_id.is_empty() {
         log::warn!("Node target empty. Fast-dropping to local bedrock fallback.");
         let _ = app_handle.emit("vera-telemetry", "FAILOVER_MODE");
-        return call_ollama("gemma3:latest", prompt).await;
+        return run_agentic_loop("gemma3:latest", prompt, &system_prompt).await;
     }
 
-    match execute_raw_api(initial_model_id, prompt).await {
+    match run_agentic_loop(initial_model_id, prompt, &system_prompt).await {
         Ok(response) => Ok(response),
         Err(e) => {
             log::error!("Node [{}] choked: {}. Dropping down to active safety cluster...", initial_model_id, e);
@@ -125,61 +127,101 @@ pub async fn dispatch_api_call(
 
             log::warn!("Executing hot-swap routing to safety node: [{}]", fallback_model);
             
-            match execute_raw_api(fallback_model, prompt).await {
+            match run_agentic_loop(fallback_model, prompt, &system_prompt).await {
                 Ok(res) => Ok(res),
                 Err(fallback_err) => {
                     log::error!("Safety node [{}] also choked: {}. Anchoring to Local Bedrock.", fallback_model, fallback_err);
-                    call_ollama("gemma3:latest", prompt).await
+                    run_agentic_loop("gemma3:latest", prompt, &system_prompt).await
                 }
             }
         }
     }
 }
 
+async fn run_agentic_loop(
+    model_id: &str,
+    user_prompt: &str,
+    system_prompt: &str,
+) -> Result<String, Box<dyn Error + Send + Sync>> {
+    let mut working_prompt = user_prompt.to_string();
+    let mut last_response = String::new();
+
+    for round in 0..MAX_TOOL_ROUNDS {
+        last_response = execute_raw_api(model_id, system_prompt, &working_prompt).await?;
+        let tool_calls = workspace::extract_tool_calls(&last_response);
+
+        if tool_calls.is_empty() {
+            return Ok(last_response);
+        }
+
+        log::info!(
+            "VERA tool round {} — executing {} workspace call(s)",
+            round + 1,
+            tool_calls.len()
+        );
+
+        let mut tool_results = String::new();
+        for call in tool_calls {
+            let result = workspace::execute_tool_from_json(&call);
+            tool_results.push_str(&format!("\n[TOOL `{}` RESULT]:\n{}\n", call, result));
+        }
+
+        working_prompt = format!(
+            "{}\n\n---\nYour previous response included workspace tool invocations. The runtime executed them and returned:\n{}\n\nContinue the original task. Emit another ```vera_tool``` block if you still need workspace access. Otherwise respond to Sir with your final answer and do not include tool blocks.",
+            user_prompt,
+            tool_results
+        );
+    }
+
+    log::warn!("VERA hit max tool rounds ({}). Returning last model response.", MAX_TOOL_ROUNDS);
+    Ok(last_response)
+}
+
 async fn execute_raw_api(
-    model_id: &str, 
+    model_id: &str,
+    system_prompt: &str,
     prompt: &str
 ) -> Result<String, Box<dyn Error + Send + Sync>> {
     match model_id {
         "gemini-2.5-flash" | "gemini-2.5-flash-lite" => {
             tokio::select! {
-                res = call_google(model_id, prompt) => {
+                res = call_google(model_id, system_prompt, prompt) => {
                     match res {
                         Ok(text) => Ok(text),
-                        Err(_) => call_ollama("gemma3:latest", prompt).await
+                        Err(_) => call_ollama("gemma3:latest", system_prompt, prompt).await
                     }
                 }
                 _ = tokio::time::sleep(Duration::from_millis(2500)) => {
                     log::error!("Gemini stalled past 2500ms budget limit. Dropping to Bedrock.");
-                    call_ollama("gemma3:latest", prompt).await
+                    call_ollama("gemma3:latest", system_prompt, prompt).await
                 }
             }
         },
         
         _ if model_id.contains(":free") => {
             tokio::select! {
-                res = call_openrouter(model_id, prompt) => {
+                res = call_openrouter(model_id, system_prompt, prompt) => {
                     match res {
                         Ok(text) => Ok(text),
-                        Err(_) => call_ollama("gemma3:latest", prompt).await
+                        Err(_) => call_ollama("gemma3:latest", system_prompt, prompt).await
                     }
                 }
                 _ = tokio::time::sleep(Duration::from_secs(3)) => {
                     log::error!("OpenRouter queue stalled. Dropping to Bedrock.");
-                    call_ollama("gemma3:latest", prompt).await
+                    call_ollama("gemma3:latest", system_prompt, prompt).await
                 }
             }
         },
         
         _ => {
-            call_ollama(model_id, prompt).await
+            call_ollama(model_id, system_prompt, prompt).await
         }
     }
 }
 
 // ─── API CLIENT INFRASTRUCTURE ─────────────────────────────────────────────
 
-async fn call_openrouter(model_id: &str, prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+async fn call_openrouter(model_id: &str, system_prompt: &str, prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     let api_key = env::var("OPENROUTER_FREE_KEY").unwrap_or_default();
     if api_key.is_empty() { return Err("CRITICAL: OPENROUTER_FREE_KEY missing.".into()); }
 
@@ -198,7 +240,7 @@ async fn call_openrouter(model_id: &str, prompt: &str) -> Result<String, Box<dyn
             "model": model_id,
             "temperature": 0.75,
             "messages": [
-                {"role": "system", "content": VERA_PERSONA},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ]
         }))
@@ -212,7 +254,7 @@ async fn call_openrouter(model_id: &str, prompt: &str) -> Result<String, Box<dyn
     Ok(res["choices"][0]["message"]["content"].as_str().unwrap_or("Stream parse error").to_string())
 }
 
-async fn call_moonshot(_model_id: &str, prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+async fn call_moonshot(_model_id: &str, system_prompt: &str, prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     let api_key = env::var("MOONSHOT_API_KEY").unwrap_or_default();
     if api_key.is_empty() { return Err("CRITICAL: MOONSHOT_API_KEY missing.".into()); }
 
@@ -224,7 +266,7 @@ async fn call_moonshot(_model_id: &str, prompt: &str) -> Result<String, Box<dyn 
             "model": "moonshot-v1-8k",
             "temperature": 0.7,
             "messages": [
-                {"role": "system", "content": VERA_PERSONA},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ]
         }))
@@ -238,7 +280,7 @@ async fn call_moonshot(_model_id: &str, prompt: &str) -> Result<String, Box<dyn 
     Ok(res["choices"][0]["message"]["content"].as_str().unwrap_or("Stream parse error").to_string())
 }
 
-async fn call_google(model_id: &str, prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+async fn call_google(model_id: &str, system_prompt: &str, prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     let api_key = env::var("GEMINI_API_KEY").unwrap_or_default();
     if api_key.is_empty() { return Err("CRITICAL: GEMINI_API_KEY missing.".into()); }
 
@@ -251,7 +293,7 @@ async fn call_google(model_id: &str, prompt: &str) -> Result<String, Box<dyn Err
     let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}", model_id, api_key);
     let response = client.post(&url)
         .json(&json!({
-            "systemInstruction": { "parts": [{ "text": VERA_PERSONA }] },
+            "systemInstruction": { "parts": [{ "text": system_prompt }] },
             "contents": [{ "parts": [{ "text": prompt }] }],
             "generationConfig": {
                 "temperature": 0.75,
@@ -268,14 +310,14 @@ async fn call_google(model_id: &str, prompt: &str) -> Result<String, Box<dyn Err
     Ok(res["candidates"][0]["content"]["parts"][0]["text"].as_str().unwrap_or("Stream parse error").to_string())
 }
 
-async fn call_ollama(model_id: &str, prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+async fn call_ollama(model_id: &str, system_prompt: &str, prompt: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
     let client = reqwest::Client::new();
     let response = client
         .post("http://127.0.0.1:11434/api/generate")
         .json(&json!({ 
             "model": model_id, 
             "prompt": prompt, 
-            "system": VERA_PERSONA,
+            "system": system_prompt,
             "stream": false,
             "options": {
                 "temperature": 0.7,

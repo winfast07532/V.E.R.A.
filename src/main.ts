@@ -146,7 +146,7 @@ async function wireBoardroomListeners() {
   await listen("boardroom:start", (event: any) => {
     if (panel && transcript && resultBox) {
       panel.classList.remove("hidden");
-      transcript.innerHTML = `<div><span class="text-purple-400">[SYSTEM]</span> Commencing triage for: ${parseVeraMarkdown(event.payload)}</div>`;
+      transcript.innerHTML = `<div class="boardroom-system-row"><span class="boardroom-tag-system">[SYSTEM]</span> Commencing triage for: ${parseVeraMarkdown(event.payload)}</div>`;
       resultBox.innerText = "Awaiting consensus...";
     }
   });
@@ -155,8 +155,8 @@ async function wireBoardroomListeners() {
     if (transcript) {
       const msg = event.payload;
       const div = document.createElement("div");
-      div.className = "my-1";
-      div.innerHTML = `<span class="text-blue-400">[${msg.agent_name} - ${msg.role}]</span> <div class="mt-0.5">${parseVeraMarkdown(msg.content)}</div>`;
+      div.className = "boardroom-message-row";
+      div.innerHTML = `<span class="boardroom-tag-agent">[${msg.agent_name} - ${msg.role}]</span> <div class="boardroom-content">${parseVeraMarkdown(msg.content)}</div>`;
       transcript.appendChild(div);
       transcript.scrollTop = transcript.scrollHeight;
     }
@@ -167,8 +167,8 @@ async function wireBoardroomListeners() {
       const pkg = event.payload;
       resultBox.innerText = `[CONSENSUS] Executor: ${pkg.selected_executor}`;
       const div = document.createElement("div");
-      div.className = "text-emerald-400 mt-2 border-t border-zinc-800 pt-2";
-      div.innerHTML = `<strong>Summary:</strong> <div>${parseVeraMarkdown(pkg.consensus_summary)}</div>`;
+      div.className = "boardroom-complete-row";
+      div.innerHTML = `<strong>Summary:</strong> <div class="boardroom-summary-text">${parseVeraMarkdown(pkg.consensus_summary)}</div>`;
       transcript.appendChild(div);
       transcript.scrollTop = transcript.scrollHeight;
     }
@@ -352,7 +352,7 @@ async function boot() {
         try {
           await invoke("flush_pipeline_memory");
           const chatLog = document.getElementById("chat-log");
-          if (chatLog) chatLog.innerHTML = `<div class="text-zinc-600 font-mono text-[9px] uppercase">[SYSTEM CONTEXT FLUSHED CLEAN]</div>`;
+          if (chatLog) chatLog.innerHTML = `<div class="system-context-flushed-clean">[SYSTEM CONTEXT FLUSHED CLEAN]</div>`;
         } catch (e) { console.error(e); }
       }
     });
@@ -409,9 +409,7 @@ async function boot() {
         isVoiceCallMode = !isVoiceCallMode;
 
         if (isVoiceCallMode) {
-          pttBtn.style.background = "rgba(138, 43, 226, 0.4)";
-          pttBtn.style.borderColor = "#8a2be2";
-          pttBtn.style.color = "#ffffff";
+          pttBtn.classList.add("ptt-active-state");
           
           const transcriptPanel = document.getElementById("boardroom-panel");
           if (transcriptPanel) {
@@ -421,9 +419,7 @@ async function boot() {
           window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "listening" }));
           try { speechEngine.start(); } catch(e) {}
         } else {
-          pttBtn.style.background = "";
-          pttBtn.style.borderColor = "";
-          pttBtn.style.color = "";
+          pttBtn.classList.remove("ptt-active-state");
           
           const transcriptPanel = document.getElementById("boardroom-panel");
           if (transcriptPanel) {
@@ -476,14 +472,15 @@ async function boot() {
       window.dispatchEvent(new CustomEvent("vera-orb-phase-shift", { detail: "thinking" }));
 
       const turnWrapper = document.createElement("div");
-      turnWrapper.className = "flex flex-col my-3";
+      turnWrapper.className = "chat-turn-wrapper";
       
       const userBox = document.createElement("div");
-      userBox.className = "group relative text-zinc-400 font-mono my-1 pl-2 border-l border-zinc-800 flex flex-col";
+      userBox.className = "user-box";
       userBox.innerHTML = `
-        <div><span class="text-zinc-600 font-bold">▲ USER [${selectedMode.toUpperCase()}]:</span> <span class="user-prompt">${value}</span></div>
-        <div class="opacity-0 group-hover:opacity-100 flex gap-3 text-[10px] mt-1 text-zinc-500 transition-opacity duration-150 titlebar-no-drag">
-          <button class="edit-trigger hover:text-purple-400 cursor-pointer">[Edit]</button>
+        <div class="user-message-header"><span class="user-meta-title">▲ USER [${selectedMode.toUpperCase()}]:</span></div>
+        <div class="user-prompt">${value}</div>
+        <div class="message-action-bar titlebar-no-drag">
+          <button class="edit-trigger">✎ Edit</button>
         </div>
       `;
 
@@ -554,22 +551,23 @@ async function boot() {
           }
           
           const veraBox = document.createElement("div");
-          veraBox.className = "group relative text-zinc-300 font-mono my-2 bg-zinc-950/40 p-2 rounded border border-zinc-900/50 flex flex-col";
+          veraBox.className = "vera-box";
           veraBox.innerHTML = `
-            <div><span class="text-purple-400 font-bold">▶ VERA [${chosenModel}]:</span> <div class="mt-1">${parseVeraMarkdown(outputText)}</div></div>
-            <div class="opacity-0 group-hover:opacity-100 flex gap-3 text-[10px] mt-1.5 text-zinc-500 transition-opacity duration-150 titlebar-no-drag">
-              <button class="copy-trigger hover:text-emerald-400 cursor-pointer">[Copy]</button>
-              <button class="retry-trigger hover:text-blue-400 cursor-pointer">[Retry]</button>
+            <div class="vera-message-header"><span class="text-purple-400 font-bold">▶ VERA [${chosenModel}]:</span></div>
+            <div class="vera-content-body">${parseVeraMarkdown(outputText)}</div>
+            <div class="message-action-bar titlebar-no-drag">
+              <button class="copy-trigger">⎘ Copy</button>
+              <button class="retry-trigger">⟳ Retry</button>
             </div>
           `;
 
           veraBox.querySelector(".copy-trigger")?.addEventListener("click", async (btnEvent) => {
             try {
               await navigator.clipboard.writeText(outputText);
-              (btnEvent.target as HTMLButtonElement).innerText = "[Copied!]";
+              (btnEvent.target as HTMLButtonElement).innerText = "✓ Copied";
               setTimeout(() => { 
                 const btn = veraBox.querySelector(".copy-trigger") as HTMLButtonElement;
-                if (btn) btn.innerText = "[Copy]";
+                if (btn) btn.innerText = "⎘ Copy";
               }, 1200);
             } catch (err) { console.error(err); }
           });

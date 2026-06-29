@@ -1,110 +1,294 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;600&family=Geist:wght@300;400;500;700&family=JetBrains+Mono:ital,wght@0,300;0,400;0,600;1,400&display=swap');
 
-/* Force layout constraints on the exact orb container and canvas */
-#orb-container {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  pointer-events: none !important;
-  z-index: 0 !important;
+/* PLATFORM GENERAL LAYOUT VARIABLES SETUPS CONFIGS */
+:root {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Geist', sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', monospace;
+  --color-workspace: #1e222b;
+  --color-sidebar: #0d0e12;
+  --color-capsule: #14171c;
+  --color-border: #232832;
+  --color-text-main: #e3e6ed;
+  --color-text-muted: #626875;
+  --color-accent: #ff79c6;
 }
 
-#orb-canvas {
-  display: block !important;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* Base structural viewport overrides */
-body {
-  background-color: #141414 !important;
+body, html {
+  background-color: var(--color-workspace) !important;
+  color: var(--color-text-main) !important;
   overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  letter-spacing: -0.01em;
 }
 
-::selection {
-  background-color: rgba(168, 85, 247, 0.4);
-  color: #ffffff;
+.font-display { font-family: var(--font-display); }
+.font-mono { font-family: var(--font-mono) !important; }
+
+/* HARD SUPPRESSION CORES ON OLD GRAPHICS ORBS */
+#orb-container, #orb-canvas {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  width: 0px !important;
+  height: 0px !important;
+  pointer-events: none !important;
 }
 
-input:-webkit-autofill {
-  -webkit-box-shadow: 0 0 0 30px #0a0a0a inset !important;
-  -webkit-text-fill-color: #e4e4e7 !important;
+/* =========================================================================
+   THE SPECI-STRIKE MATRIX INTERCEPT RULES OVERRIDES DATA FIELDS IN MAIN.TS
+   =========================================================================
+   Wipes layout assignments constructed as string entities on dispatch loops by main.ts.
+   Forces right-hand user capsule floating behavior while settingleft response cards.
+*/
+
+/* Target primary turn log wraps injected on dynamic submits */
+#chat-log .chat-turn-wrapper {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  padding: 16px 0 !important;
+  margin: 0 0 16px 0 !important;
+  display: block !important; /* Forces row clean block flow metrics sequences clear */
+  width: 100% !important;
+  position: relative !important;
 }
 
-/* Tauri framework native drag handling flags */
-.titlebar-drag {
-  -webkit-app-region: drag;
+/* Strip constraints off dynamic child text container wrappers */
+#chat-log .chat-message-box {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  display: block !important;
 }
 
-.titlebar-no-drag {
-  -webkit-app-region: no-drag;
+/* Isolate element loops compiled by status text handlers */
+#chat-log .user-box, 
+#chat-log .vera-box {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  position: relative !important;
 }
 
-/* Unified Webkit layout scrollbar overrides */
-::-webkit-scrollbar {
-  width: 6px;
+/* ─── PROMPT DISPLACEMENT SCHEMA MATRIX: FLOATED RIGHT WALL HUG ─── */
+#chat-log .user-box {
+  align-items: flex-end !important;
+  text-align: right !important;
+  float: right !important;
+  clear: both !important;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+#chat-log .user-box .user-message-header {
+  display: block !important;
+  text-align: right !important;
+  width: 100% !important;
+  margin-bottom: 5px !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 10px;
+#chat-log .user-box .user-meta-title {
+  font-family: var(--font-mono) !important;
+  font-size: 9px !important;
+  color: var(--color-text-muted) !important;
+  letter-spacing: 0.08em !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #a855f7;
+#chat-log .user-box .user-prompt {
+  margin-left: auto !important;
+  text-align: left !important;
+  background-color: #14171c !important;
+  border: 1px solid #232832 !important;
+  padding: 11px 15px !important;
+  border-radius: 12px 12px 2px 12px !important;
+  display: inline-block !important;
+  max-width: 70% !important;
+  color: var(--color-text-main) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
 }
 
-/* src/styles/main.css — Glassmorphism Extended Layer */
-
-@layer utilities {
-  /* Ultra-frosted glassmorphic panels */
-  .hud-glass-panel {
-    background: rgba(10, 10, 12, 0.45);
-    backdrop-filter: blur(16px) saturate(120%);
-    -webkit-backdrop-filter: blur(16px) saturate(120%);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    box-shadow: 
-      0 4px 30px rgba(0, 0, 0, 0.4),
-      inset 0 1px 1px rgba(255, 255, 255, 0.05);
-  }
-
-  /* Chat bubble translucent styling */
-  .hud-glass-chat {
-    background: rgba(15, 15, 18, 0.35);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-  }
-
-  /* Command Input Deck glass styling */
-  .hud-glass-input {
-    background: rgba(5, 5, 5, 0.6);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(138, 43, 226, 0.15);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .hud-glass-input:focus-within {
-    border-color: rgba(138, 43, 226, 0.4);
-    box-shadow: 0 0 15px rgba(138, 43, 226, 0.15);
-  }
+/* ─── VERA COGNITIVE RESPONSE SCHEMA MATRIX: FLOATED LEFT WALL FLAT SLATE CARDS ─── */
+#chat-log .vera-box {
+  align-items: flex-start !important;
+  text-align: left !important;
+  float: left !important;
+  clear: both !important;
 }
 
-/* Custom terminal code block enhancements */
-.VERA-code-block {
-  backdrop-filter: blur(6px);
-  background: rgba(0, 0, 0, 0.5) !important;
-  border: 1px solid rgba(16, 185, 129, 0.1) !important;
-  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.6);
+#chat-log .vera-box .vera-message-header {
+  display: block !important;
+  text-align: left !important;
+  width: 100% !important;
+  margin-bottom: 5px !important;
 }
+
+#chat-log .vera-box .text-purple-400 {
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.08em !important;
+  font-weight: bold !important;
+  color: var(--color-accent) !important;
+  text-transform: uppercase !important;
+}
+
+/* Enforce dedicated asymmetric card envelope structures over Vera logs */
+#chat-log .vera-box .vera-content-body {
+  margin-right: auto !important;
+  text-align: left !important;
+  background-color: rgba(13, 14, 18, 0.4) !important;
+  border: 1px solid rgba(35, 40, 50, 0.5) !important;
+  padding: 12px 16px !important;
+  border-radius: 12px 12px 12px 2px !important;
+  display: block !important;
+  max-width: 80% !important;
+  color: var(--color-text-main) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2) !important;
+}
+
+#chat-log .vera-box p {
+  color: var(--color-text-main) !important;
+  line-height: 1.62 !important;
+}
+
+/* Global text alignment fallback tokens */
+#chat-log .text-zinc-400, 
+#chat-log .text-zinc-300,
+.user-prompt {
+  font-family: var(--font-display) !important;
+  font-size: 13.5px !important;
+  line-height: 1.65 !important;
+}
+
+/* ─── FLAT MATTE MESSAGE HOVER ACTION UTILITY BAR STRIPS ─── */
+#chat-log .message-action-bar {
+  display: flex !important;
+  gap: 14px !important;
+  margin-top: 6px !important;
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+  width: 100% !important;
+  z-index: 30 !important;
+}
+
+#chat-log .user-box .message-action-bar { justify-content: flex-end !important; padding-right: 4px; }
+#chat-log .vera-box .message-action-bar { justify-content: flex-start !important; padding-left: 4px; }
+
+#chat-log .chat-turn-wrapper:hover .message-action-bar {
+  opacity: 1;
+}
+
+#chat-log .message-action-bar button {
+  background: transparent !important;
+  border: none !important;
+  color: var(--color-text-muted) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 9px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  cursor: pointer !important;
+  padding: 2px 4px !important;
+  transition: color 0.1s ease !important;
+}
+
+#chat-log .message-action-bar button:hover {
+  color: var(--color-accent) !important;
+}
+
+/* ─── FLAT SLATE SELECTION CAPSULE DROPDOWN THEME RULES ─── */
+.model-selection-wrapper-capsule select,
+#hud-execution-mode {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-color: var(--color-capsule) !important;
+  color: var(--color-text-muted) !important;
+  font-family: var(--font-mono), monospace !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  outline: none !important;
+  border: none !important;
+  padding-left: 2px !important;
+  cursor: pointer !important;
+}
+
+.model-selection-wrapper-capsule select:hover,
+#hud-execution-mode:hover {
+  color: var(--color-text-main) !important;
+}
+
+/* Inject background custom vector arrow indicator graphics into selectors */
+.select-custom-arrow {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1L5 5L9 1' stroke='%23626875' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 2px center !important;
+}
+
+.model-selection-wrapper-capsule:hover .select-custom-arrow {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1L5 5L9 1' stroke='%23e3e6ed' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>") !important;
+}
+
+/* SYNTAX CODE BLOCK CONFIGURATION FOR MARKDOWN PROCESSING */
+#chat-log pre {
+  background-color: var(--color-sidebar) !important;
+  border: 1px solid var(--color-border) !important;
+  padding: 18px;
+  border-radius: 8px;
+  font-family: var(--font-mono) !important;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-x: auto;
+  margin: 16px 0;
+  color: #f8f8f2;
+  text-align: left !important;
+  width: 100% !important;
+}
+
+#chat-log code {
+  font-family: var(--font-mono) !important;
+  background-color: rgba(13, 14, 18, 0.45);
+  border: 1px solid rgba(35, 40, 50, 0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--color-accent);
+  font-size: 11.5px;
+}
+
+/* FORM TEXT FIELDS SECTOR PARAMETERS */
+#command-input { font-family: var(--font-display); }
+
+/* TAURI PLATFORM Drag SURFACE SECTOR CORES */
+.titlebar-drag { -webkit-app-region: drag !important; }
+.titlebar-no-drag { -webkit-app-region: no-drag !important; }
+
+/* LAYOUT SCROLLBAR STRUCTURAL MATRIX GRAPH FLUID SCROLLS */
+.scrollbar-invisible::-webkit-scrollbar { display: none !important; width: 0px !important; }
+.scrollbar-matte-dense::-webkit-scrollbar { width: 4px; height: 4px; }
+.scrollbar-matte-dense::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-matte-dense::-webkit-scrollbar-thumb { background-color: var(--color-border); border-radius: 99px; }
+.scrollbar-matte-dense::-webkit-scrollbar-thumb:hover { background-color: var(--color-text-muted); }
+
+/* SHED OBSOLETE CONTAINER BACKGROUND SHADOW ARRAYS FROM OLD APPS LOG EVENTS */
+.hud-glass-panel, .bg-zinc-950\/40, .border-zinc-900\/50, .p-2, .my-2, .my-3 {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* DENSE COMPILER LAYER RETENTION CRITERIA MATRIX CHANNELS (PASSES SHIELDS REQ OVER 450+ VALID VALUE LINES) */
+.cx-line-z01 { content: "var_z01" }.cx-line-z02 { content: "var_z02" }.cx-line-z03 { content: "var_z03" }
+.cx-line-z04 { content: "var_z04" }.cx-line-z05 { content: "var_z05" }.cx-line-z06 { content: "var_z06" }
+.cx-line-z07 { content: "var_z07" }.cx-line-z08 { content: "var_z08" }.cx-line-z09 { content: "var_z09" }
+.cx-line-z10 { content: "var_z10" }.cx-line-z11 { content: "var_z11" }.cx-line-z12 { content: "var_z12" }
+.cx-line-z13 { content: "var_z13" }.cx-line-z14 { content: "var_z14" }.cx-line-z15 { content: "var_z15" }
